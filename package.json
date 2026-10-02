@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "npm test",
+    "build": "node --test src/translation.test.ts src/app-state.test.ts src/app-view.test.ts",
     "test": "node --test src/*.test.ts"
   },
   "dependencies": {
