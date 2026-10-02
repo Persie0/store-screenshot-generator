@@ -23,6 +23,8 @@ export function duplicateProject(project:Project,projectId:string,screenIds:stri
   updatedAt:now,
   analysis,
   translations,
+  localizedLocales:project.localizedLocales?[...project.localizedLocales]:undefined,
+  translationLocales:project.translationLocales?[...project.translationLocales]:undefined,
   screens:project.screens.map((screen,index)=>({...screen,id:resolvedIds[index],transform:copyTransform(screen.transform)})),
  };
 }
