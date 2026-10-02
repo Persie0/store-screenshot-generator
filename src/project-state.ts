@@ -8,15 +8,22 @@ export function renameProject(project:Project,name:string,now:number):Project{
 }
 
 export function duplicateProject(project:Project,projectId:string,screenIds:string[],now:number):Project{
+ const resolvedIds=project.screens.map((screen,index)=>screenIds[index]||`${screen.id}-copy-${index+1}`);
+ const idMap=new Map(project.screens.map((screen,index)=>[screen.id,resolvedIds[index]]));
+ const analysis=project.analysis?structuredClone(project.analysis):undefined;
+ if(analysis)analysis.screens=analysis.screens.map(screen=>({...screen,id:idMap.get(screen.id)||screen.id}));
+ const translations=project.translations?Object.fromEntries(Object.entries(project.translations).map(([locale,entries])=>[
+  locale,Object.fromEntries(Object.entries(entries).map(([screenId,copy])=>[idMap.get(screenId)||screenId,structuredClone(copy)])),
+ ])):undefined;
  return {
   ...project,
   id:projectId,
   name:normalizedName(`${project.name} copy`,project.name),
   createdAt:now,
   updatedAt:now,
-  analysis:project.analysis?structuredClone(project.analysis):undefined,
-  translations:project.translations?structuredClone(project.translations):undefined,
-  screens:project.screens.map((screen,index)=>({...screen,id:screenIds[index]||`${screen.id}-copy-${index+1}`,transform:copyTransform(screen.transform)})),
+  analysis,
+  translations,
+  screens:project.screens.map((screen,index)=>({...screen,id:resolvedIds[index],transform:copyTransform(screen.transform)})),
  };
 }
 
