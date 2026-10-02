@@ -19,10 +19,17 @@ test('dashboard renders all projects newest-first with project actions and FAB',
   assert.ok(html.includes(`data-rename="${id}"`));
   assert.ok(html.includes(`data-duplicate="${id}"`));
   assert.ok(html.includes(`data-delete="${id}"`));
+  assert.ok(html.includes(`data-export="${id}"`));
  }
  assert.ok(html.includes('data-new-project'));
  assert.ok(html.includes('New project'));
  assert.ok(html.includes('Saved on this device'));
+});
+
+test('dashboard withholds export action from incomplete or errored projects',()=>{
+ const html=dashboardMarkup([project('loading','Loading',2,'analyzing'),project('bad','Bad',1,'error')]);
+ assert.ok(!html.includes('data-export="loading"'));
+ assert.ok(!html.includes('data-export="bad"'));
 });
 
 test('dashboard escapes project names',()=>{
