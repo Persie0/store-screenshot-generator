@@ -5,10 +5,10 @@ import {
 import type { ProjectShot } from './storage.ts';
 
 export type CropSession={present:ScreenshotTransform;past:ScreenshotTransform[];future:ScreenshotTransform[]};
-export type CropBulkMode='same-size'|'same-aspect';
+export type CropBulkMode='same-size'|'same-aspect'|'same-pixels';
 export type CropEditorOptions={shot:ProjectShot;shots:ProjectShot[];initial:ScreenshotTransform;onApply:(transform:ScreenshotTransform,bulkMode?:CropBulkMode)=>void;onCancel:()=>void};
 
-type MarkupOptions={sameSizeCount:number;sameAspectCount:number;imageUrl?:string;imageName?:string;sourceWidth?:number;sourceHeight?:number};
+type MarkupOptions={sameSizeCount:number;sameAspectCount:number;pixelCount:number;imageUrl?:string;imageName?:string;sourceWidth?:number;sourceHeight?:number};
 let cropClipboard:ScreenshotTransform|undefined;
 const esc=(value:string)=>value.replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[char]!));
 
@@ -20,6 +20,7 @@ export function setCropSessionTransform(session:CropSession,next:ScreenshotTrans
 export function undoCropSession(session:CropSession):CropSession{if(!session.past.length)return session;const previous=session.past[session.past.length-1];return {present:copyTransform(previous),past:session.past.slice(0,-1),future:[copyTransform(session.present),...session.future]}}
 export function redoCropSession(session:CropSession):CropSession{if(!session.future.length)return session;const next=session.future[0];return {present:copyTransform(next),past:[...session.past,copyTransform(session.present)],future:session.future.slice(1)}}
 export function nudgeCropSession(session:CropSession,dx:number,dy:number):CropSession{return setCropSessionTransform(session,{...session.present,crop:moveCrop(session.present.crop,dx,dy)})}
+export function cropBulkModeForAction(action:string|undefined):CropBulkMode|undefined{return action==='apply-same-size'?'same-size':action==='apply-same-aspect'?'same-aspect':action==='apply-same-pixels'?'same-pixels':undefined}
 
 export function cropPresetAspect(preset:string,sourceWidth:number,sourceHeight:number,customRatio?:number):number|undefined{
  if(preset==='Free')return undefined;
@@ -53,7 +54,7 @@ export function cropEditorMarkup(options:MarkupOptions):string{
     <section><b>Transform</b><div class="crop-button-grid"><button data-crop-action="rotate-left">Rotate left</button><button data-crop-action="rotate-right">Rotate right</button><button data-crop-action="flip-h">Flip H</button><button data-crop-action="flip-v">Flip V</button><button data-crop-action="fit">Fit</button><button data-crop-action="fill">Fill</button><button data-crop-action="center">Center</button><button data-crop-action="reset-crop">Reset crop</button><button data-crop-action="reset-all">Reset all</button></div></section>
     <section><b>Crop coordinates</b><div class="crop-coordinate-grid">${['x','y','width','height'].map(field=>`<label>${field.toUpperCase()} <input data-crop-coordinate="${field}" type="number" min="0" max="1" step="0.001"></label>`).join('')}</div></section>
     <section><b>Guides</b><label><input data-crop-guide="thirds" type="checkbox" checked> Rule of thirds</label><label><input data-crop-guide="center" type="checkbox"> Center guides</label><label><input data-crop-guide="safe" type="checkbox"> Safe area</label><label><input data-crop-before type="checkbox"> Before / after</label></section>
-    <section><b>Reuse crop</b><div class="crop-button-grid"><button data-crop-action="copy">Copy crop</button><button data-crop-action="paste">Paste crop</button></div><button class="crop-bulk" data-crop-action="apply-same-size" ${options.sameSizeCount<2?'disabled':''}>Apply to all same-size (${options.sameSizeCount})</button><button class="crop-bulk" data-crop-action="apply-same-aspect" ${options.sameAspectCount<2?'disabled':''}>Apply to same-aspect (${options.sameAspectCount})</button></section>
+    <section><b>Reuse crop</b><div class="crop-button-grid"><button data-crop-action="copy">Copy crop</button><button data-crop-action="paste">Paste crop</button></div><button class="crop-bulk" data-crop-action="apply-same-size" ${options.sameSizeCount<2?'disabled':''}>Apply to all same-size (${options.sameSizeCount})</button><button class="crop-bulk" data-crop-action="apply-same-aspect" ${options.sameAspectCount<2?'disabled':''}>Apply to same-aspect (${options.sameAspectCount})</button><button class="crop-bulk" data-crop-action="apply-same-pixels" ${options.pixelCount<2?'disabled':''}>Apply same pixel crop to all (${options.pixelCount})</button></section>
    </aside>
   </div>
  </div>`;
@@ -65,7 +66,8 @@ export function mountCropEditor(container:HTMLElement,options:CropEditorOptions)
  const sameSizeCount=options.shots.filter(s=>s.sourceWidth===options.shot.sourceWidth&&s.sourceHeight===options.shot.sourceHeight&&!!s.sourceWidth).length;
  const sourceAspect=options.shot.sourceWidth&&options.shot.sourceHeight?options.shot.sourceWidth/options.shot.sourceHeight:0;
  const sameAspectCount=options.shots.filter(s=>sourceAspect&&s.sourceWidth&&s.sourceHeight&&Math.abs(s.sourceWidth/s.sourceHeight-sourceAspect)<1e-6).length;
- container.innerHTML=cropEditorMarkup({sameSizeCount,sameAspectCount,imageUrl:url,imageName:options.shot.name,sourceWidth:options.shot.sourceWidth,sourceHeight:options.shot.sourceHeight});
+ const pixelCount=options.shots.filter(s=>!!s.sourceWidth&&!!s.sourceHeight).length;
+ container.innerHTML=cropEditorMarkup({sameSizeCount,sameAspectCount,pixelCount,imageUrl:url,imageName:options.shot.name,sourceWidth:options.shot.sourceWidth,sourceHeight:options.shot.sourceHeight});
  const root=container.querySelector<HTMLElement>('.crop-editor')!,stage=container.querySelector<HTMLElement>('.crop-stage')!,box=container.querySelector<HTMLElement>('.crop-box')!,img=container.querySelector<HTMLImageElement>('.crop-image')!;
  const listeners:Array<()=>void>=[];const on=<K extends keyof HTMLElementEventMap>(el:HTMLElement|Window,type:K,fn:(event:HTMLElementEventMap[K])=>void)=>{el.addEventListener(type,fn as EventListener);listeners.push(()=>el.removeEventListener(type,fn as EventListener))};
  const set=(next:ScreenshotTransform)=>{session=setCropSessionTransform(session,next);sync()};
@@ -85,7 +87,7 @@ export function mountCropEditor(container:HTMLElement,options:CropEditorOptions)
  container.querySelectorAll<HTMLInputElement>('[data-crop-guide]').forEach(input=>on(input,'change',()=>container.querySelector<HTMLElement>(`.crop-guide.${input.dataset.cropGuide}`)?.classList.toggle('visible',input.checked)));
  const before=container.querySelector<HTMLInputElement>('[data-crop-before]');if(before)on(before,'change',()=>root.classList.toggle('show-before',before.checked));
  container.querySelectorAll<HTMLElement>('[data-crop-action]').forEach(button=>on(button,'click',()=>{
-  const action=button.dataset.cropAction;
+  const action=button.dataset.cropAction,bulkMode=cropBulkModeForAction(action);
   if(action==='undo'){session=undoCropSession(session);sync()}else if(action==='redo'){session=redoCropSession(session);sync()}
   else if(action==='rotate-left')set({...session.present,rotation:normalizeRotation(session.present.rotation-90)})
   else if(action==='rotate-right')set({...session.present,rotation:normalizeRotation(session.present.rotation+90)})
@@ -99,8 +101,7 @@ export function mountCropEditor(container:HTMLElement,options:CropEditorOptions)
   else if(action==='copy')cropClipboard=copyTransform(session.present)
   else if(action==='paste'&&cropClipboard){lockedAspect=undefined;set(copyTransform(cropClipboard))}
   else if(action==='apply'){options.onApply(copyTransform(session.present));destroy()}
-  else if(action==='apply-same-size'){options.onApply(copyTransform(session.present),'same-size');destroy()}
-  else if(action==='apply-same-aspect'){options.onApply(copyTransform(session.present),'same-aspect');destroy()}
+  else if(bulkMode){options.onApply(copyTransform(session.present),bulkMode);destroy()}
   else if(action==='cancel'){options.onCancel();destroy()}
  }));
  on(stage,'wheel',event=>{event.preventDefault();set({...session.present,zoom:clampZoom(session.present.zoom*(event.deltaY<0?1.08:.92))})});
