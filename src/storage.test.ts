@@ -40,8 +40,8 @@ test('malformed persisted transform recovers instead of breaking project load',a
  assert.deepEqual(loaded?.screens[0].transform,identityTransform());
 });
 
-test('project manifest includes source dimensions and transform while excluding blobs',()=>{
- const p=project('manifest',50);
+test('project manifest includes source dimensions transform and locale configuration while excluding blobs',()=>{
+ const p=project('manifest',50);p.sourceLocale='en';p.localizedLocales=['en','nb','nn'];p.translationLocales=['nb'];
  const manifest=projectManifest(p);
  const shot=manifest.screens[0];
  assert.equal(shot.sourceWidth,1179);
@@ -49,4 +49,13 @@ test('project manifest includes source dimensions and transform while excluding 
  assert.deepEqual(shot.transform,p.screens[0].transform);
  assert.equal('blob' in shot,false);
  assert.match(shot.originalPath,/originals\/shot-manifest-screen\.png/);
+ assert.equal(manifest.sourceLocale,'en');
+ assert.deepEqual(manifest.localizedLocales,['en','nb','nn']);
+ assert.deepEqual(manifest.translationLocales,['nb']);
+});
+
+test('save and load preserves imported locale settings',async()=>{
+ const p=project('locales',60);p.sourceLocale='en';p.localizedLocales=['en','nb','nn'];p.translationLocales=['nb','nn'];
+ await saveProject(p);const loaded=await getProject('locales');
+ assert.equal(loaded?.sourceLocale,'en');assert.deepEqual(loaded?.localizedLocales,['en','nb','nn']);assert.deepEqual(loaded?.translationLocales,['nb','nn']);
 });
