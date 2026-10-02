@@ -26,12 +26,18 @@ test('rejects files without usable locale declarations',()=>{
  assert.throws(()=>extractFlutterLocales('abstract class AppLocalizations {}'),/No supported Flutter locales/i);
 });
 
-test('keeps unknown valid locale codes and provides known friendly labels',()=>{
- assert.equal(normalizeLocaleCode('gsw'),'gsw');
- assert.equal(localeLabel('gsw'),'gsw');
- assert.equal(localeLabel('en'),'English');
- assert.equal(localeLabel('nb'),'Norwegian Bokmål');
- assert.equal(localeLabel('nn'),'Norwegian Nynorsk');
+test('names all common imported language codes instead of showing raw codes',()=>{
+ const expected:Record<string,string>={
+  ar:'Arabic',bn:'Bangla',cs:'Czech',da:'Danish',de:'German',es:'Spanish',fi:'Finnish',fil:'Filipino',fr:'French',he:'Hebrew',hi:'Hindi',hu:'Hungarian',id:'Indonesian',it:'Italian',ja:'Japanese',ko:'Korean',ms:'Malay',nl:'Dutch',no:'Norwegian',pl:'Polish',pt:'Portuguese',ro:'Romanian',ru:'Russian',sk:'Slovak',sv:'Swedish',th:'Thai',tr:'Turkish',uk:'Ukrainian',ur:'Urdu',vi:'Vietnamese',zh:'Chinese',nb:'Norwegian Bokmål',nn:'Norwegian Nynorsk',
+ };
+ for(const [code,label] of Object.entries(expected))assert.equal(localeLabel(code),label,code);
+});
+
+test('names valid languages and region or script variants beyond the current UI sample',()=>{
+ const expected:Record<string,string>={
+  gsw:'Swiss German',yue:'Cantonese',sw:'Swahili',fa:'Persian',el:'Greek',ca:'Catalan',eu:'Basque',gl:'Galician',is:'Icelandic',et:'Estonian',lv:'Latvian',lt:'Lithuanian',sl:'Slovenian',hr:'Croatian',bg:'Bulgarian',mk:'Macedonian',sq:'Albanian',hy:'Armenian',ka:'Georgian',az:'Azerbaijani',kk:'Kazakh',uz:'Uzbek',mn:'Mongolian',ne:'Nepali',si:'Sinhala',ta:'Tamil',te:'Telugu',ml:'Malayalam',mr:'Marathi',gu:'Gujarati',kn:'Kannada',pa:'Punjabi',af:'Afrikaans',am:'Amharic',zu:'Zulu',xh:'Xhosa','pt-BR':'Brazilian Portuguese','zh-Hans':'Simplified Chinese','zh-TW':'Chinese (Taiwan)','en-GB':'British English','es-MX':'Mexican Spanish','sr-Latn':'Serbian (Latin)','sr-Cyrl':'Serbian (Cyrillic)',
+ };
+ for(const [code,label] of Object.entries(expected))assert.equal(localeLabel(code),label,code);
  assert.deepEqual(DEFAULT_TRANSLATION_LOCALES,['de','fr','es','ja','pt-BR','zh-CN']);
 });
 
