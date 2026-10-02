@@ -1,5 +1,6 @@
 export type CropRect={x:number;y:number;width:number;height:number};
 export type PixelRect={x:number;y:number;width:number;height:number};
+export type PixelInsets={left:number;top:number;right:number;bottom:number};
 export type CropHandle='n'|'ne'|'e'|'se'|'s'|'sw'|'w'|'nw';
 export type CropAnchor='center'|'nw'|'ne'|'sw'|'se';
 export type ScreenshotTransform={crop:CropRect;zoom:number;panX:number;panY:number;rotation:number;flipX:boolean;flipY:boolean};
@@ -78,6 +79,20 @@ export function cropToPixels(crop:CropRect,sourceWidth:number,sourceHeight:numbe
 }
 export function pixelsToCrop(rect:PixelRect,sourceWidth:number,sourceHeight:number):CropRect{
  const w=Math.max(1,finite(sourceWidth,1)),h=Math.max(1,finite(sourceHeight,1));return clampCrop({x:finite(rect.x,0)/w,y:finite(rect.y,0)/h,width:finite(rect.width,w)/w,height:finite(rect.height,h)/h});
+}
+export function cropToPixelInsets(crop:CropRect,sourceWidth:number,sourceHeight:number):PixelInsets|undefined{
+ if(!Number.isFinite(sourceWidth)||!Number.isFinite(sourceHeight)||sourceWidth<=0||sourceHeight<=0)return undefined;
+ const c=clampCrop(crop),width=Math.round(sourceWidth),height=Math.round(sourceHeight);
+ const left=Math.max(0,Math.round(c.x*width)),top=Math.max(0,Math.round(c.y*height));
+ const right=Math.max(0,Math.round((1-c.x-c.width)*width)),bottom=Math.max(0,Math.round((1-c.y-c.height)*height));
+ if(left+right>=width||top+bottom>=height)return undefined;
+ return {left,top,right,bottom};
+}
+export function pixelInsetsToCrop(insets:PixelInsets,width:number,height:number):CropRect|undefined{
+ if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)return undefined;
+ const w=Math.round(width),h=Math.round(height),left=Math.max(0,Math.round(finite(insets?.left,0))),top=Math.max(0,Math.round(finite(insets?.top,0))),right=Math.max(0,Math.round(finite(insets?.right,0))),bottom=Math.max(0,Math.round(finite(insets?.bottom,0)));
+ if(left+right>=w||top+bottom>=h)return undefined;
+ return {x:left/w,y:top/h,width:(w-left-right)/w,height:(h-top-bottom)/h};
 }
 export function fitCrop():CropRect{return {x:0,y:0,width:1,height:1}}
 export function fillCrop(sourceWidth:number,sourceHeight:number,targetAspect:number):CropRect{
