@@ -1,4 +1,4 @@
-import { canApplyTransform, copyTransform, sanitizeTransform, type ScreenshotTransform } from './crop.ts';
+import { canApplyTransform, copyTransform, cropToPixelInsets, pixelInsetsToCrop, sanitizeTransform, type ScreenshotTransform } from './crop.ts';
 import type { Project } from './storage.ts';
 
 const normalizedName=(name:string,fallback:string)=>name.trim().slice(0,70)||fallback;
@@ -34,10 +34,22 @@ export function setShotTransform(project:Project,shotId:string,transform:Screens
  return changed?{...project,screens,updatedAt:now}:project;
 }
 
-export function applyTransformToMatchingShots(project:Project,sourceShotId:string,transform:ScreenshotTransform,mode:'same-size'|'same-aspect',now:number):{project:Project;appliedIds:string[];skippedIds:string[]}{
+export function applyTransformToMatchingShots(project:Project,sourceShotId:string,transform:ScreenshotTransform,mode:'same-size'|'same-aspect'|'same-pixels',now:number):{project:Project;appliedIds:string[];skippedIds:string[]}{
  const source=project.screens.find(screen=>screen.id===sourceShotId);
  if(!source)return {project,appliedIds:[],skippedIds:project.screens.map(screen=>screen.id)};
  const safe=sanitizeTransform(transform),appliedIds:string[]=[],skippedIds:string[]=[];
+ if(mode==='same-pixels'){
+  const insets=source.sourceWidth&&source.sourceHeight?cropToPixelInsets(safe.crop,source.sourceWidth,source.sourceHeight):undefined;
+  if(!insets)return {project,appliedIds:[],skippedIds:project.screens.map(screen=>screen.id)};
+  const screens=project.screens.map(screen=>{
+   if(screen.id===sourceShotId){appliedIds.push(screen.id);return {...screen,transform:copyTransform(safe)}}
+   if(!screen.sourceWidth||!screen.sourceHeight){skippedIds.push(screen.id);return screen}
+   const crop=pixelInsetsToCrop(insets,screen.sourceWidth,screen.sourceHeight);
+   if(!crop){skippedIds.push(screen.id);return screen}
+   const current=sanitizeTransform(screen.transform);appliedIds.push(screen.id);return {...screen,transform:{...current,crop}};
+  });
+  return {project:{...project,screens,updatedAt:appliedIds.length?now:project.updatedAt},appliedIds,skippedIds};
+ }
  const screens=project.screens.map(screen=>{
   if(canApplyTransform(source,screen,mode)){appliedIds.push(screen.id);return {...screen,transform:copyTransform(safe)}}
   skippedIds.push(screen.id);return screen;
