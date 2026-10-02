@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { identityTransform } from './crop.ts';
-import { exportAssetPath,makeTextCheckEntry,shouldRenderStoreSize,storeAssetJobs } from './export-plan.ts';
+import { exportAssetPath,exportLocales,makeTextCheckEntry,shouldRenderStoreSize,storeAssetJobs } from './export-plan.ts';
 import { STORE_SIZES } from './platform.ts';
 import type { Project } from './storage.ts';
 
@@ -35,6 +35,16 @@ test('storeAssetJobs creates all permitted size/screen combinations',()=>{
  assert.equal(jobs.length,expected);
  assert.equal(jobs.filter(job=>job.size.key==='google/feature-graphic').length,1);
  assert.equal(jobs[0].shot,p.screens[0]);
+});
+
+test('configured export locales include English and only selected targets with complete translations',()=>{
+ const p=project();p.sourceLocale='en';p.localizedLocales=['en','nb','nn','fr'];p.translationLocales=['nb','nn'];p.translations={nb:{s1:{headline:'A',subheadline:'B'},s2:{headline:'C',subheadline:'D'}},nn:{s1:{headline:'A',subheadline:'B'}},fr:{s1:{headline:'A',subheadline:'B'},s2:{headline:'C',subheadline:'D'}}};
+ assert.deepEqual(exportLocales(p),['en','nb']);
+});
+
+test('legacy export locales include existing translations from the default set',()=>{
+ const p=project();p.translations={de:{s1:{headline:'A',subheadline:'B'},s2:{headline:'C',subheadline:'D'}},nb:{s1:{headline:'A',subheadline:'B'},s2:{headline:'C',subheadline:'D'}}};
+ assert.deepEqual(exportLocales(p),['en','de']);
 });
 
 test('text check explicitly remains based on original Gemini analysis after crop',()=>{
