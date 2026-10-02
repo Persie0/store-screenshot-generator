@@ -31,7 +31,7 @@ class FakeDatabase {
 
 export function installFakeIndexedDb(){
  const records=new Map<IDBValidKey,any>();const db=new FakeDatabase(records);
- const factory={open:()=>{const req=new FakeRequest<IDBDatabase>() as unknown as IDBOpenDBRequest;queueMicrotask(()=>{(req.onupgradeneeded as ((event?:Event)=>unknown)|null)?.call(req);(req as unknown as {result:IDBDatabase}).result=db as unknown as IDBDatabase;(req.onsuccess as ((event?:Event)=>unknown)|null)?.call(req)});return req}} as unknown as IDBFactory;
+ const factory={open:()=>{const request=new FakeRequest<IDBDatabase>();request.result=db as unknown as IDBDatabase;const req=request as unknown as IDBOpenDBRequest;queueMicrotask(()=>{(req.onupgradeneeded as ((event?:Event)=>unknown)|null)?.call(req);(req.onsuccess as ((event?:Event)=>unknown)|null)?.call(req)});return req}} as unknown as IDBFactory;
  (globalThis as unknown as {window:{indexedDB:IDBFactory}}).window={indexedDB:factory};
  (globalThis as unknown as {indexedDB:IDBFactory}).indexedDB=factory;
  return {records,factory};
