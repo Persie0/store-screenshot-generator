@@ -1,12 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { identityTransform } from './crop.ts';
-import { applyCropPreset,cropEditorMarkup,cropPresetAspect,createCropSession,normalizedRatioForSource,nudgeCropSession,redoCropSession,setCropSessionTransform,undoCropSession } from './crop-editor.ts';
+import { applyCropPreset,cropBulkModeForAction,cropEditorMarkup,cropPresetAspect,createCropSession,normalizedRatioForSource,nudgeCropSession,redoCropSession,setCropSessionTransform,undoCropSession } from './crop-editor.ts';
 
 test('crop editor markup exposes the full editing toolset',()=>{
- const html=cropEditorMarkup({sameSizeCount:4,sameAspectCount:5,sourceWidth:1179,sourceHeight:2556});
- for(const label of ['Free','Original','1:1','3:2','2:3','4:3','3:4','5:4','4:5','16:9','9:16','iPhone','Android','Custom','Zoom','Pan X','Pan Y','Rotate left','Rotate right','Straighten','Flip H','Flip V','Fit','Fill','Center','Undo','Redo','Copy crop','Paste crop','Before / after','Rule of thirds','Center guides','Safe area','Apply to all same-size','Apply to same-aspect'])assert.ok(html.includes(label),label);
+ const html=cropEditorMarkup({sameSizeCount:4,sameAspectCount:5,pixelCount:5,sourceWidth:1179,sourceHeight:2556});
+ for(const label of ['Free','Original','1:1','3:2','2:3','4:3','3:4','5:4','4:5','16:9','9:16','iPhone','Android','Custom','Zoom','Pan X','Pan Y','Rotate left','Rotate right','Straighten','Flip H','Flip V','Fit','Fill','Center','Undo','Redo','Copy crop','Paste crop','Before / after','Rule of thirds','Center guides','Safe area','Apply to all same-size','Apply to same-aspect','Apply same pixel crop to all'])assert.ok(html.includes(label),label);
  assert.ok(html.includes('aspect-ratio:1179 / 2556'));
+});
+
+test('same-pixel action is disabled until another screenshot has dimensions',()=>{
+ const html=cropEditorMarkup({sameSizeCount:1,sameAspectCount:1,pixelCount:1,sourceWidth:1179,sourceHeight:2556});
+ assert.match(html,/data-crop-action="apply-same-pixels" disabled/);
+ assert.equal(cropBulkModeForAction('apply-same-size'),'same-size');
+ assert.equal(cropBulkModeForAction('apply-same-aspect'),'same-aspect');
+ assert.equal(cropBulkModeForAction('apply-same-pixels'),'same-pixels');
+ assert.equal(cropBulkModeForAction('apply'),undefined);
 });
 
 test('crop session supports undo and redo without mutating original transform',()=>{
