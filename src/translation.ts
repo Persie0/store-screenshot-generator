@@ -11,7 +11,8 @@ export async function translateApprovedScreensForLocales(apiKey:string,analysis:
  const translations:Translations={};
  for(const code of locales){
   const entries=result.translations?.[code];
-  for(const screen of analysis.screens){const copy=entries?.[screen.id];if(!copy?.headline||!copy?.subheadline)throw new Error(`Gemini did not return a complete ${localeLabel(code)} translation. Please retry.`)}
+  if(!entries)throw new Error(`Gemini did not return a complete ${localeLabel(code)} translation. Please retry.`);
+  for(const screen of analysis.screens){const copy=entries[screen.id];if(!copy?.headline||!copy?.subheadline)throw new Error(`Gemini did not return a complete ${localeLabel(code)} translation. Please retry.`)}
   translations[code]=entries;
  }
  return translations;
