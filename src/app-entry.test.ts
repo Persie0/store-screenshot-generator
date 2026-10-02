@@ -11,10 +11,22 @@ test('browser entrypoint uses the tested dashboard/crop app and no legacy main r
  assert.ok(!index.includes('src/main.ts'));
  assert.equal(existsSync(join(root,'src/main.ts')),false);
  const app=readFileSync(join(root,'src/app.ts'),'utf8');
- for(const dependency of ['./dashboard.ts','./crop-editor.ts','./project-state.ts','./render.ts','./export-plan.ts'])assert.ok(app.includes(dependency),dependency);
+ for(const dependency of ['./dashboard.ts','./crop-editor.ts','./project-state.ts','./render.ts','./export-plan.ts','./localization.ts','./translation.ts'])assert.ok(app.includes(dependency),dependency);
  assert.match(app,/initialRoute\(projects\)/);
  assert.match(app,/mountCropEditor/);
  assert.match(app,/applyTransformToMatchingShots/);
+});
+
+test('browser entrypoint wires local Flutter locale import, selected translations, selected exports and dimension-aware pixel crop',()=>{
+ const app=readFileSync(join(root,'src/app.ts'),'utf8');
+ assert.match(app,/extractFlutterLocales/);
+ assert.match(app,/applyImportedLocales/);
+ assert.match(app,/setTranslationLocaleSelected/);
+ assert.match(app,/translateApprovedScreensForLocales/);
+ assert.match(app,/selectedTranslationLocales/);
+ assert.match(app,/exportLocales/);
+ assert.match(app,/Promise\.all\(project\.screens\.map\(ensureDimensions\)\)/);
+ assert.match(app,/same-pixels/);
 });
 
 test('crop header keeps Apply readable as a primary action',()=>{
