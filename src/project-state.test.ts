@@ -76,6 +76,26 @@ test('same-aspect crop maps normalized coordinates to compatible dimensions only
  assert.equal(result.project.englishApproved,p.englishApproved);
 });
 
+test('same-pixels bulk crop preserves exact source pixel insets and target non-crop transforms',()=>{
+ const p=makeProject();
+ p.screens[1].transform={...identityTransform(),rotation:17,flipX:true,flipY:true,zoom:2,panX:.2,panY:-.3};
+ p.screens[2].transform={...identityTransform(),rotation:-11,flipY:true,zoom:1.5,panX:-.1,panY:.4};
+ p.screens.push({id:'tiny',name:'tiny.png',blob:new Blob(['x']),headline:'',subheadline:'',sourceWidth:200,sourceHeight:300,transform:{...identityTransform(),rotation:33}});
+ p.screens.push({id:'unknown',name:'unknown.png',blob:new Blob(['x']),headline:'',subheadline:'',transform:{...identityTransform(),rotation:44}});
+ const transform={...identityTransform(),crop:{x:100/1179,y:200/2556,width:(1179-300)/1179,height:(2556-600)/2556},rotation:99,flipX:true,zoom:4,panX:.8};
+ const beforeS2=structuredClone(p.screens[1].transform),beforeS3=structuredClone(p.screens[2].transform),analysis=structuredClone(p.analysis),translations=structuredClone(p.translations);
+ const result=applyTransformToMatchingShots(p,'s1',transform,'same-pixels',600);
+ assert.deepEqual(result.appliedIds,['s1','s2','s3','s4']);
+ assert.deepEqual(result.skippedIds,['tiny','unknown']);
+ assert.deepEqual(result.project.screens[0].transform,transform);
+ const s2=result.project.screens[1].transform!,s3=result.project.screens[2].transform!;
+ assert.deepEqual({...s2,crop:beforeS2!.crop},beforeS2);
+ assert.deepEqual({...s3,crop:beforeS3!.crop},beforeS3);
+ assert.deepEqual(s2.crop,{x:100/1179,y:200/2556,width:(1179-300)/1179,height:(2556-600)/2556});
+ assert.deepEqual(s3.crop,{x:100/786,y:200/1704,width:(786-300)/786,height:(1704-600)/1704});
+ assert.deepEqual(result.project.analysis,analysis);assert.deepEqual(result.project.translations,translations);assert.equal(result.project.englishApproved,true);
+});
+
 test('dashboardProjects returns newest projects first without mutating input',()=>{
  const a=makeProject(),b={...makeProject(),id:'p2',updatedAt:99},input=[a,b];
  const ordered=dashboardProjects(input);
