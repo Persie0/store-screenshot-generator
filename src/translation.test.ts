@@ -8,9 +8,10 @@ const analysis:Analysis={appSummary:'A focus timer',appCategory:'Productivity',d
 function responseFor(locales:string[]){return {translations:Object.fromEntries(locales.map(code=>[code,{'screen-1':{headline:`${code} headline`,subheadline:`${code} line`}}]))}}
 
 test('explicit translation targets include only selected non-English locales',async()=>{
- let body='';let calls=0;const fetcher=(async(_input:RequestInfo|URL,init?:RequestInit)=>{calls++;body=String(init?.body);return new Response(JSON.stringify({output_text:JSON.stringify(responseFor(['nb','nn']))}),{status:200})}) as typeof fetch;
+ let requestBody='';let calls=0;const fetcher=(async(_input:RequestInfo|URL,init?:RequestInit)=>{calls++;requestBody=String(init?.body);return new Response(JSON.stringify({output_text:JSON.stringify(responseFor(['nb','nn']))}),{status:200})}) as typeof fetch;
  const result=await translateApprovedScreensForLocales('k',analysis,['en','nb','nn','nb'],fetcher);
- assert.equal(calls,1);assert.deepEqual(Object.keys(result),['nb','nn']);assert.match(body,/"nb"/);assert.match(body,/"nn"/);assert.ok(!body.includes('"de"'));
+ const decoded=JSON.parse(requestBody) as {input:Array<{type:string;text?:string}>};const prompt=decoded.input[0]?.text||'';
+ assert.equal(calls,1);assert.deepEqual(Object.keys(result),['nb','nn']);assert.match(prompt,/"nb"/);assert.match(prompt,/"nn"/);assert.ok(!prompt.includes('"de"'));
 });
 
 test('empty translation target set skips Gemini entirely',async()=>{
