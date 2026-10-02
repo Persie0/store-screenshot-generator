@@ -1,4 +1,5 @@
 import { scanCopy,type Translation } from './studio.ts';
+import { DEFAULT_TRANSLATION_LOCALES,selectedTranslationLocales } from './localization.ts';
 import type { StoreSize } from './platform.ts';
 import { STORE_SIZES } from './platform.ts';
 import type { Project,ProjectShot } from './storage.ts';
@@ -12,6 +13,13 @@ export function exportAssetPath(locale:string,size:StoreSize,screenIndex:number,
 export function copyForExport(project:Project,shot:ProjectShot,locale:string):Translation|undefined{
  if(locale==='en')return {headline:shot.headline,subheadline:shot.subheadline};
  return project.translations?.[locale]?.[shot.id];
+}
+
+export function exportLocales(project:Project):string[]{
+ const complete=(code:string)=>project.screens.every(screen=>!!project.translations?.[code]?.[screen.id]?.headline&&!!project.translations?.[code]?.[screen.id]?.subheadline);
+ const configured=project.translationLocales!==undefined||project.localizedLocales!==undefined;
+ const candidates=configured?selectedTranslationLocales(project):DEFAULT_TRANSLATION_LOCALES;
+ return ['en',...candidates.filter(code=>complete(code))];
 }
 
 export function storeAssetJobs(project:Project,locale:string):StoreAssetJob[]{
