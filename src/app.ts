@@ -36,7 +36,7 @@ function showWorking(name:string,step:string,percent=15){
 function escapeHtml(value:string){return value.replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]!))}
 
 async function readDimensions(blob:Blob):Promise<{width?:number;height?:number}>{try{const bitmap=await createImageBitmap(blob);const result={width:bitmap.width,height:bitmap.height};bitmap.close();return result}catch{return {}}}
-async function makeShot(file:File,index:number):Promise<ProjectShot>{const size=await readDimensions(file);return {id:`screen-${crypto.randomUUID()}`,name:file.name,blob:file,headline:'',subheadline:'',sourceWidth:size.width,sourceHeight:size.height,transform:identityTransform()}}
+async function makeShot(file:File,_index:number):Promise<ProjectShot>{const size=await readDimensions(file);return {id:`screen-${crypto.randomUUID()}`,name:file.name,blob:file,headline:'',subheadline:'',sourceWidth:size.width,sourceHeight:size.height,transform:identityTransform()}}
 
 function renderDashboard(){
  project=undefined;releaseProjectUrls();releaseDashboardUrls();const thumbnails:Record<string,string>={};
@@ -74,11 +74,11 @@ function openCurrentProject(){if(!project)return;releaseDashboardUrls();releaseP
 
 function renderStudio(){if(!project)return;activeScreen=Math.min(activeScreen,Math.max(0,project.screens.length-1));root.innerHTML=studioMarkup(project,activeScreen,locale,previewSizeKey,projectUrls);document.title=`${project.name} — Frame`;wireStudio();schedulePreview()}
 
-function wireStudio(){if(!project)return;const shot=project.screens[activeScreen];
+function wireStudio(){if(!project)return;
  $('#back-projects')?.addEventListener('click',()=>{void persist().then(reloadProjects).then(renderDashboard)});$('#rename-project')?.addEventListener('click',()=>void renameCurrentProject());$('#rename-inline')?.addEventListener('click',()=>void renameCurrentProject());$('#export-project')?.addEventListener('click',openExportModal);
  $$<HTMLElement>('[data-screen]').forEach(button=>button.addEventListener('click',()=>{activeScreen=Number(button.dataset.screen)||0;renderStudio()}));
  $$<HTMLElement>('[data-crop-screen]').forEach(button=>button.addEventListener('click',()=>openCropEditor(button.dataset.cropScreen!)));
- $('#preview-size-select')?.addEventListener('change',event=>{previewSizeKey=(event.target as HTMLSelectElement).value as typeof previewSizeKey;schedulePreview()});
+ $('#preview-size-select')?.addEventListener('change',event=>{previewSizeKey=(event.target as HTMLSelectElement).value;schedulePreview()});
  $('#add-screens')?.addEventListener('change',event=>{const files=Array.from((event.target as HTMLInputElement).files||[]);if(files.length)void addScreens(files)});
  $$<HTMLElement>('[data-locale]').forEach(button=>button.addEventListener('click',()=>{locale=button.dataset.locale||'en';renderStudio()}));
  const h=$<HTMLTextAreaElement>('#headline-input'),s=$<HTMLTextAreaElement>('#subheadline-input');h?.addEventListener('input',()=>updateCopy('headline',h.value));s?.addEventListener('input',()=>updateCopy('subheadline',s.value));
@@ -114,7 +114,7 @@ async function exportZip(){if(!project)return;const selected=$$<HTMLInputElement
   files.push({path:'TEXT-CHECK-REPORT.json',data:JSON.stringify({generatedAt:new Date().toISOString(),note:'Text detection and overlap warnings refer to original uploaded screenshots. Cropping does not trigger Gemini reanalysis.',screens:checks},null,2)});files.push({path:'EXPORT-SIZES.txt',data:STORE_SIZES.map(size=>`${size.platform} — ${size.label}: ${size.width} × ${size.height}px`).join('\n')});
   if($<HTMLInputElement>('#include-project')?.checked){files.push({path:'project/project.json',data:JSON.stringify(projectManifest(project),null,2)});for(const shot of project.screens)files.push({path:`project/originals/${shot.id}-${safeStem(shot.name)}`,data:shot.blob})}
   if(status)status.textContent='Packing ZIP…';const zip=await createZip(files),anchor=document.createElement('a');anchor.href=URL.createObjectURL(zip);anchor.download=`${safeStem(project.name)}-store-assets.zip`;anchor.click();setTimeout(()=>URL.revokeObjectURL(anchor.href),15000);if(status)status.textContent=`Done · ${files.length} files · ${(zip.size/1024/1024).toFixed(1)} MB`;if(button){button.disabled=false;button.textContent='Download another ZIP ↓'}
- }catch(error){if(status)status.textContent=errorText(error);if(button)button.disabled=false}}
+ }catch(error){if(status)status.textContent=errorText(error);if(button)button.disabled=false}
 }
 
 async function boot(){try{await reloadProjects();initialRoute(projects)==='dashboard'?renderDashboard():renderOnboarding()}catch(error){renderOnboarding(errorText(error))}}
