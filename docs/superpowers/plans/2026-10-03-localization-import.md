@@ -4,7 +4,7 @@
 
 **Goal:** Let each project upload Flutter-generated `app_localizations.dart`, detect supported locales locally, keep English as the fixed source language, and use selected non-English locales for translation tabs and exports.
 
-**Architecture:** Add a pure locale parser/config module, persist optional locale metadata on `Project`, expose explicit locale-target translation while preserving the current default wrapper, and wire project-level language controls into the existing studio. Existing projects remain compatible and use the current six default targets until they import localization metadata.
+**Architecture:** Add a dependency-light pure locale parser/catalog module, persist optional locale metadata on `Project`, keep project-specific locale merge/selection logic in `project-state.ts`, expose explicit locale-target translation while preserving the current default wrapper, and wire project-level language controls into the existing studio. Existing projects remain compatible and use the current six default targets until they import localization metadata.
 
 **Tech Stack:** TypeScript, browser File API, IndexedDB, Node built-in test runner, existing Gemini interaction client, Vite.
 
@@ -17,7 +17,8 @@
 - Uploading/replacing the localization file never reruns screenshot analysis.
 - All detected non-English locales are selected on first import.
 - Unknown but syntactically valid locale codes must be preserved.
-- Legacy projects without locale metadata keep the current default translation targets.
+- Legacy projects without locale metadata keep the current default translation targets `de`, `fr`, `es`, `ja`, `pt-BR`, `zh-CN`.
+- `src/localization.ts` must not import project/storage/studio modules; it is the shared low-level locale catalog/parser and avoids dependency cycles.
 - No GitHub Actions are required; use the existing local/Vercel build gate.
 
 ## Review Focus
@@ -30,19 +31,23 @@
 
 ---
 
-### Task 1: Pure Flutter Locale Parser
+### Task 1: Pure Flutter Locale Parser and Catalog
 
 **Files:**
 - Create: `src/localization.ts`
 - Create: `src/localization.test.ts`
+- Modify: `src/studio.ts`
+- Modify: `src/studio.test.ts`
 
 **Interfaces:**
 - Produces: `extractFlutterLocales(source:string):string[]`
 - Produces: `normalizeLocaleCode(code:string):string|undefined`
 - Produces: `localeLabel(code:string):string`
-- Produces: `DEFAULT_TRANSLATION_LOCALES:readonly string[]` derived from the existing default locale set
+- Produces: `LOCALES` with the existing six default code/label pairs.
+- Produces: `DEFAULT_TRANSLATION_LOCALES:readonly string[]` equal to `['de','fr','es','ja','pt-BR','zh-CN']`.
+- `studio.ts` re-exports `LOCALES` for compatibility with existing imports/tests while consuming the catalog from `localization.ts`.
 
-- [ ] **Step 1: Write failing parser tests**
+- [ ] **Step 1: Write failing parser/catalog tests**
 
 Cover these exact assertions:
 - `supportedLocales` containing `Locale('en'), Locale('nb'), Locale('nn')` returns `['en','nb','nn']`.
@@ -52,16 +57,17 @@ Cover these exact assertions:
 - without `supportedLocales`, imports `app_localizations_en.dart` and `app_localizations_nb.dart` return `['en','nb']`.
 - malformed/no-locale input throws a readable error.
 - an unknown valid code such as `gsw` remains `gsw` and gets label fallback `gsw`.
+- `DEFAULT_TRANSLATION_LOCALES` exactly matches the current six target codes.
 
-- [ ] **Step 2: Run `node --test src/localization.test.ts` and verify RED**
+- [ ] **Step 2: Run `node --test src/localization.test.ts src/studio.test.ts` and verify RED**
 
 Expected: FAIL because `localization.ts`/exports do not exist.
 
-- [ ] **Step 3: Implement the parser and label helpers**
+- [ ] **Step 3: Implement the dependency-free parser/catalog and re-export `LOCALES` from `studio.ts`**
 
 Use a deterministic parser scoped to the generated `supportedLocales` block first, then generated import filenames as fallback. Do not execute/evaluate Dart and do not use Gemini.
 
-- [ ] **Step 4: Run `node --test src/localization.test.ts` and verify GREEN**
+- [ ] **Step 4: Run focused tests and verify GREEN**
 
 - [ ] **Step 5: Commit**
 
@@ -74,13 +80,12 @@ Use a deterministic parser scoped to the generated `supportedLocales` block firs
 - Modify: `src/storage.test.ts`
 - Modify: `src/project-state.ts`
 - Modify: `src/project-state.test.ts`
-- Modify: `src/localization.ts`
-- Modify: `src/localization.test.ts`
 
 **Interfaces:**
 - Extend `Project` with `sourceLocale?:string`, `localizedLocales?:string[]`, `translationLocales?:string[]`.
-- Produces: `applyImportedLocales(project:Project,detected:string[],now:number):Project`
-- Produces: `selectedTranslationLocales(project:Project):string[]`
+- Produces from `project-state.ts`: `applyImportedLocales(project:Project,detected:string[],now:number):Project`
+- Produces from `project-state.ts`: `setTranslationLocaleSelected(project:Project,locale:string,selected:boolean,now:number):Project`
+- Produces from `project-state.ts`: `selectedTranslationLocales(project:Project):string[]`
 
 - [ ] **Step 1: Write failing model/persistence tests**
 
@@ -88,17 +93,16 @@ Assert:
 - imported `['en','nb','nn']` stores `sourceLocale:'en'`, `localizedLocales:['en','nb','nn']`, `translationLocales:['nb','nn']`.
 - imported `['nb','nn']` still stores English in `localizedLocales` as the fixed source.
 - re-import preserves an existing unchecked locale, preserves checked locales that still exist, selects newly detected non-English locales, and removes disappeared locales.
+- attempting to select `en` never places it in `translationLocales`.
 - save/load plus `projectManifest()` preserves all three locale fields.
 - `duplicateProject()` deep-copies locale arrays.
 - a project with no locale fields resolves to the existing default target set.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [ ] **Step 2: Run `node --test src/storage.test.ts src/project-state.test.ts` and verify RED**
 
-Run: `node --test src/localization.test.ts src/storage.test.ts src/project-state.test.ts`
+- [ ] **Step 3: Implement optional project fields, normalization, import merge behavior, selection mutation, manifest persistence, and duplicate copying**
 
-- [ ] **Step 3: Implement optional project fields, normalization, import merge behavior, manifest persistence, and duplicate copying**
-
-Do not bump IndexedDB destructively; optional fields must normalize safely for existing records.
+Do not bump IndexedDB destructively; optional fields must normalize safely for existing records. Use `DEFAULT_TRANSLATION_LOCALES` only for legacy projects without imported locale metadata.
 
 - [ ] **Step 4: Run focused tests and verify GREEN**
 
@@ -123,7 +127,7 @@ Assert:
 - `en` passed accidentally is excluded.
 - duplicate target codes are deduplicated.
 - `[]` returns `{}` and calls the fetcher zero times.
-- legacy `translateApprovedScreens()` still requests the existing default locale set.
+- legacy `translateApprovedScreens()` still requests exactly `DEFAULT_TRANSLATION_LOCALES`.
 
 - [ ] **Step 2: Run `node --test src/studio.test.ts` and verify RED**
 
@@ -148,16 +152,16 @@ The English source copy in `Analysis.screens` must remain unchanged.
 - Modify: `src/app-features.css`
 
 **Interfaces:**
-- Consumes: `extractFlutterLocales`, `applyImportedLocales`, `selectedTranslationLocales`, `localeLabel`, `translateApprovedScreensForLocales`.
+- Consumes: `extractFlutterLocales`, `localeLabel`, `applyImportedLocales`, `setTranslationLocaleSelected`, `selectedTranslationLocales`, `translateApprovedScreensForLocales`.
 - Produces UI controls: file input `#localization-file`, locale checkboxes `[data-translation-locale]`, fixed English source row.
 
 - [ ] **Step 1: Write failing view/state tests**
 
 Assert generated studio markup:
 - always displays `English (en)` as source/default.
-- for an imported project with `['en','nb','nn']`, renders `nb` and `nn` target checkboxes with the selected state from `translationLocales`.
+- for an imported project with `['en','nb','nn']`, renders `nb` and `nn` target checkboxes with selected state from `translationLocales`.
 - exposes an `Upload app_localizations.dart` file input accepting `.dart`.
-- uses locale tabs from the project locale configuration rather than all hard-coded defaults once an import exists.
+- uses locale tabs from the imported project locale configuration rather than all hard-coded defaults once an import exists.
 
 Add state tests proving toggling a target updates only `translationLocales` and `updatedAt`, not analysis/English copy.
 
@@ -195,7 +199,7 @@ Assert:
 - selected `nb`/`nn` with translations are included.
 - a deselected locale with stale cached translations is excluded.
 - a selected locale without generated translations is not offered as a completed translated export.
-- a legacy project continues to expose the current default translated locales that actually exist in `translations`.
+- a legacy project continues to expose current default translated locales that actually exist in `translations`.
 
 - [ ] **Step 2: Run `node --test src/export-plan.test.ts src/app-entry.test.ts` and verify RED**
 
@@ -224,7 +228,7 @@ Expected: all tests PASS.
 
 Expected: test gate, TypeScript, and Vite build all PASS.
 
-- [ ] **Step 3: Manually inspect the generated view contract for the supplied locale set**
+- [ ] **Step 3: Inspect the generated view contract for the supplied locale set**
 
 Expected: English source plus selected Bokmål (`nb`) and Nynorsk (`nn`) targets; no API call occurs during file parsing.
 
