@@ -42,7 +42,7 @@ test('studio renders translated copy without changing the underlying English sou
  assert.ok(html.includes('German'));
 });
 
-test('configured projects show English source, Dart upload, detected target checkboxes, and only configured locale tabs',()=>{
+test('configured projects show English source, Dart upload, detected target checkboxes, and only selected locale tabs',()=>{
  const project=p();project.sourceLocale='en';project.localizedLocales=['en','nb','nn'];project.translationLocales=['nb'];project.translations={nb:{s1:{headline:'Bokmål',subheadline:'Tekst'}},nn:{s1:{headline:'Nynorsk',subheadline:'Tekst'}}};
  const html=studioMarkup(project,0,'en',STORE_SIZES[0].key,['blob:one','blob:two']);
  assert.ok(html.includes('Localization languages'));
@@ -54,8 +54,13 @@ test('configured projects show English source, Dart upload, detected target chec
  assert.ok(html.includes('Norwegian Bokmål'));
  assert.ok(html.includes('Norwegian Nynorsk'));
  assert.ok(html.includes('NB Norwegian Bokmål'));
- assert.ok(html.includes('NN Norwegian Nynorsk'));
+ assert.ok(!html.includes('NN Norwegian Nynorsk'));
  assert.ok(!html.includes('DE German'));
+});
+
+test('studio can show a transient editor notice without persisting it into project state',()=>{
+ const html=studioMarkup(p(),0,'en',STORE_SIZES[0].key,['blob:one','blob:two'],'Updated 3 screenshots; skipped 1.');
+ assert.ok(html.includes('Updated 3 screenshots; skipped 1.'));
 });
 
 test('views escape project and screenshot names',()=>{
