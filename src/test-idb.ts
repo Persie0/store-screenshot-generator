@@ -5,10 +5,14 @@ class FakeRequest<T> {
  succeed(value:T){this.result=value;queueMicrotask(()=>this.onsuccess?.call(this as unknown as IDBRequest<T>));}
 }
 
-class FakeIndex {constructor(private records:Map<IDBValidKey,unknown>){} }
+class FakeIndex {
+ private records:Map<IDBValidKey,unknown>;
+ constructor(records:Map<IDBValidKey,unknown>){this.records=records}
+}
 class FakeObjectStore {
  indexNames={contains:(_name:string)=>true} as DOMStringList;
- constructor(private records:Map<IDBValidKey,any>){}
+ private records:Map<IDBValidKey,any>;
+ constructor(records:Map<IDBValidKey,any>){this.records=records}
  createIndex(){return new FakeIndex(this.records) as unknown as IDBIndex}
  put(value:any){const req=new FakeRequest<IDBValidKey>();this.records.set(value.id,structuredClone(value));req.succeed(value.id);return req as unknown as IDBRequest<IDBValidKey>}
  get(key:IDBValidKey){const req=new FakeRequest<any>();req.succeed(structuredClone(this.records.get(key)));return req as unknown as IDBRequest<any>}
@@ -18,7 +22,8 @@ class FakeObjectStore {
 
 class FakeTransaction {
  onabort:Listener<IDBTransaction>|null=null;error:DOMException|null=null;
- constructor(private store:FakeObjectStore){}
+ private store:FakeObjectStore;
+ constructor(store:FakeObjectStore){this.store=store}
  objectStore(){return this.store as unknown as IDBObjectStore}
 }
 
