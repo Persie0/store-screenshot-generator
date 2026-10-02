@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFor,initialRoute,updateScreenCopy } from './app-state.ts';
+import { copyFor,initialRoute,setTranslationLocaleSelected,updateScreenCopy } from './app-state.ts';
 import type { Project } from './storage.ts';
 
 const base=():Project=>({id:'p',name:'Demo',createdAt:1,updatedAt:2,status:'ready',englishApproved:true,translations:{de:{s:{headline:'Hallo',subheadline:'Welt'}}},screens:[{id:'s',name:'screen.png',blob:new Blob(['x']),headline:'Hello',subheadline:'World'}]});
@@ -32,4 +32,14 @@ test('editing translation changes only selected locale',()=>{
  assert.equal(changed.translations?.de.s.subheadline,'Neue Welt');
  assert.equal(changed.screens[0].subheadline,'World');
  assert.equal(changed.englishApproved,true);
+});
+
+test('translation target toggles only locale selection and timestamp',()=>{
+ const p={...base(),sourceLocale:'en',localizedLocales:['en','nb','nn'],translationLocales:['nb']};
+ const enabled=setTranslationLocaleSelected(p,'nn',true,20);
+ assert.deepEqual(enabled.translationLocales,['nb','nn']);assert.equal(enabled.updatedAt,20);assert.equal(enabled.translations,p.translations);assert.equal(enabled.englishApproved,true);
+ const disabled=setTranslationLocaleSelected(enabled,'nb',false,21);
+ assert.deepEqual(disabled.translationLocales,['nn']);
+ assert.equal(setTranslationLocaleSelected(disabled,'en',true,22),disabled);
+ assert.equal(setTranslationLocaleSelected(disabled,'de',true,22),disabled);
 });
