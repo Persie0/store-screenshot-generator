@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { identityTransform } from './crop.ts';
+import { cropToPixelInsets,identityTransform } from './crop.ts';
 import { applyTransformToMatchingShots,dashboardProjects,duplicateProject,renameProject,setShotTransform } from './project-state.ts';
 import type { Project } from './storage.ts';
 
 function makeProject():Project{
  const transform={...identityTransform(),crop:{x:.1,y:.1,width:.8,height:.8}};
  return {
-  id:'p1',name:'Demo',createdAt:1,updatedAt:2,status:'ready',englishApproved:true,
+  id:'p1',name:'Demo',createdAt:1,updatedAt:2,status:'ready',englishApproved:true,sourceLocale:'en',localizedLocales:['en','nb','nn'],translationLocales:['nb'],
   analysis:{appSummary:'a',appCategory:'b',designStyle:'c',layoutMood:'minimal',audience:'d',palette:{accent:'#111111',ink:'#222222',paper:'#ffffff',secondary:'#eeeeee'},screens:[{id:'s1',headline:'One',subheadline:'First',detectedText:['UI'],overlapWarning:''}]},
   translations:{de:{s1:{headline:'Hallo',subheadline:'Welt'}}},
   screens:[
@@ -28,7 +28,7 @@ test('renameProject trims, caps the name, and updates only project metadata',()=
  assert.equal(p.name,'Demo');
 });
 
-test('duplicateProject assigns new IDs and remaps analysis/translations to the duplicate screens',()=>{
+test('duplicateProject assigns new IDs, remaps screen references, and deep-copies locale arrays',()=>{
  const p=makeProject();
  const duplicate=duplicateProject(p,'p2',['n1','n2','n3','n4'],200);
  assert.equal(duplicate.id,'p2');
@@ -43,6 +43,8 @@ test('duplicateProject assigns new IDs and remaps analysis/translations to the d
  assert.equal(duplicate.translations?.de.s1,undefined);
  assert.equal(p.analysis?.screens[0].id,'s1');
  assert.deepEqual(p.translations?.de.s1,{headline:'Hallo',subheadline:'Welt'});
+ assert.deepEqual(duplicate.localizedLocales,['en','nb','nn']);assert.notEqual(duplicate.localizedLocales,p.localizedLocales);
+ assert.deepEqual(duplicate.translationLocales,['nb']);assert.notEqual(duplicate.translationLocales,p.translationLocales);
 });
 
 test('setShotTransform changes only the requested screenshot and leaves Gemini state intact',()=>{
@@ -87,12 +89,12 @@ test('same-pixels bulk crop preserves exact source pixel insets and target non-c
  const result=applyTransformToMatchingShots(p,'s1',transform,'same-pixels',600);
  assert.deepEqual(result.appliedIds,['s1','s2','s3','s4']);
  assert.deepEqual(result.skippedIds,['tiny','unknown']);
- assert.deepEqual(result.project.screens[0].transform,transform);
+ assert.deepEqual(cropToPixelInsets(result.project.screens[0].transform!.crop,1179,2556),{left:100,top:200,right:200,bottom:400});
  const s2=result.project.screens[1].transform!,s3=result.project.screens[2].transform!;
  assert.deepEqual({...s2,crop:beforeS2!.crop},beforeS2);
  assert.deepEqual({...s3,crop:beforeS3!.crop},beforeS3);
- assert.deepEqual(s2.crop,{x:100/1179,y:200/2556,width:(1179-300)/1179,height:(2556-600)/2556});
- assert.deepEqual(s3.crop,{x:100/786,y:200/1704,width:(786-300)/786,height:(1704-600)/1704});
+ assert.deepEqual(cropToPixelInsets(s2.crop,1179,2556),{left:100,top:200,right:200,bottom:400});
+ assert.deepEqual(cropToPixelInsets(s3.crop,786,1704),{left:100,top:200,right:200,bottom:400});
  assert.deepEqual(result.project.analysis,analysis);assert.deepEqual(result.project.translations,translations);assert.equal(result.project.englishApproved,true);
 });
 
