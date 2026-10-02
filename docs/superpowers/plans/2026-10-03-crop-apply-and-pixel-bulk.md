@@ -4,7 +4,7 @@
 
 **Goal:** Make the crop Apply action readable and add a bulk crop mode that applies the source screenshot's exact pixel insets to every compatible screenshot while preserving each target's non-crop transforms.
 
-**Architecture:** Keep crop geometry pure and testable by adding pixel-inset conversion helpers to the crop/project-state layer, then expose one new bulk action in the existing crop editor. The UI fix is a crop-specific primary-button selector so the generic header button rule cannot override Apply contrast again.
+**Architecture:** Keep crop geometry pure and testable by adding pixel-inset conversion helpers to the crop/project-state layer, then expose one new bulk action in the existing crop editor. The app resolves missing screenshot dimensions before mounting the editor so pixel propagation is available for old projects; the UI fix is a crop-specific primary-button selector so the generic header rule cannot override Apply contrast again.
 
 **Tech Stack:** TypeScript, DOM/CSS, existing crop session/project-state modules, Node built-in test runner, Vite.
 
@@ -14,7 +14,8 @@
 
 - Crop changes never rerun Gemini analysis.
 - Same-pixel bulk applies only crop geometry; rotation, flips, zoom, and pan remain target-specific.
-- Screenshots with missing dimensions or dimensions too small for the source insets are skipped safely.
+- Pure project-state logic safely skips invalid/missing dimensions, while the browser app must resolve and persist missing source dimensions before enabling pixel propagation.
+- Screenshots too small for the source insets are skipped safely.
 - Existing same-size and same-aspect bulk modes remain unchanged.
 - The crop Apply button must render as blue with readable white text.
 - No GitHub Actions are required; use the existing local/Vercel build gate.
@@ -24,7 +25,7 @@
 - Rounding source normalized crop to integer pixel insets must not generate negative residual width/height; pin in Task 1.
 - Very small target screenshots where opposing insets consume the whole image must be skipped, not clamped into a misleading crop; pin in Task 2.
 - Targets with pre-existing rotation/flip/zoom/pan must retain them exactly after pixel bulk application; pin in Task 2.
-- Missing dimensions must disable/skip pixel propagation rather than treating dimensions as `1×1`; pin in Task 2/3.
+- Legacy screenshots with missing dimensions must have dimensions loaded/persisted before the crop editor enables pixel propagation; pin in Task 4.
 - CSS specificity must keep `.primary-btn` readable inside `.crop-head-actions`; pin with a style contract test in Task 3.
 
 ---
@@ -78,7 +79,7 @@ Use a source shot and differently sized targets. Assert:
 - source screenshot gets the current session crop.
 - target rotation, `flipX`, `flipY`, `zoom`, `panX`, and `panY` remain byte-for-byte unchanged.
 - targets too small for the insets are listed in `skippedIds` and remain unchanged.
-- targets with missing source dimensions are skipped.
+- targets with missing source dimensions are skipped by this pure function.
 - `analysis`, `translations`, and `englishApproved` are untouched.
 
 - [ ] **Step 2: Run `node --test src/project-state.test.ts` and verify RED**
@@ -109,7 +110,7 @@ Only replace each target transform's `crop` field. Do not reuse the existing ful
 
 Assert:
 - crop editor markup contains `Apply same pixel crop to all`.
-- action is disabled when fewer than two screenshots have known dimensions.
+- action is enabled when the editor receives at least two screenshots with known dimensions and disabled otherwise.
 - clicking the action calls `onApply(currentTransform,'same-pixels')`.
 - stylesheet contains a crop-header primary rule equivalent to `.crop-head-actions .primary-btn{background:var(--blue);color:#fff;border-color:var(--blue)}` and a readable hover/focus rule.
 - generic `.crop-head-actions button` white background remains allowed for Undo/Redo/Cancel without overriding the primary rule.
@@ -118,7 +119,7 @@ Assert:
 
 - [ ] **Step 3: Implement the new crop editor action and explicit primary-action CSS specificity**
 
-The UI may show the count of dimension-known screenshots, but the project-state result remains authoritative about applied/skipped IDs.
+The project-state result remains authoritative about applied/skipped IDs.
 
 - [ ] **Step 4: Run focused tests and verify GREEN**
 
@@ -133,25 +134,31 @@ The UI may show the count of dimension-known screenshots, but the project-state 
 - Modify: `src/app-entry.test.ts`
 
 **Interfaces:**
+- Add `ensureProjectDimensions(project:Project):Promise<boolean>` or equivalent browser helper that reads missing image dimensions, mutates only `sourceWidth/sourceHeight`, and reports whether persistence is needed.
 - Consumes: same-pixel project-state operation through `mountCropEditor(...onApply...)`.
 
 - [ ] **Step 1: Write failing app-entry contract tests**
 
 Assert source contains wiring that:
-- ensures the active screenshot dimensions before mounting the editor;
+- before mounting the crop editor, resolves dimensions for every project screenshot missing `sourceWidth/sourceHeight` using the original Blob;
+- persists newly discovered dimensions before presenting the pixel-bulk action;
 - when bulk mode is `same-pixels`, uses the pixel propagation path;
 - persists the resulting project without altering analysis state;
 - surfaces the applied/skipped count to the user after the operation.
 
 - [ ] **Step 2: Run `node --test src/app-entry.test.ts` and verify RED**
 
-- [ ] **Step 3: Implement app wiring**
+- [ ] **Step 3: Implement project-wide dimension loading before crop-editor mount**
 
-If another target lacks dimensions, the operation may skip it rather than loading every Blob eagerly. Report `Updated N screenshots; skipped M` when skips occur.
+Reuse the existing `readDimensions()` logic, resolve only screenshots missing dimensions, persist once if any values were added, then mount the editor with the now-complete screenshot list.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [ ] **Step 4: Wire the same-pixel result and feedback**
 
-- [ ] **Step 5: Commit**
+Report `Updated N screenshots; skipped M` when invalid/too-small targets are skipped. Missing dimensions after attempted decoding count as skipped rather than blocking the entire editor.
+
+- [ ] **Step 5: Run focused tests and verify GREEN**
+
+- [ ] **Step 6: Commit**
 
 `git commit -am "feat: wire same-pixel crop bulk action"`
 
