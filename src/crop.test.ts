@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
- applyAspectRatio,canApplyTransform,clampCrop,clampPan,clampZoom,cropToPixels,fitCrop,fillCrop,
- identityTransform,moveCrop,normalizeRotation,pixelsToCrop,resizeCrop,sameSourceAspect,sameSourceSize,
+ applyAspectRatio,canApplyTransform,clampCrop,clampPan,clampZoom,cropToPixelInsets,cropToPixels,fitCrop,fillCrop,
+ identityTransform,moveCrop,normalizeRotation,pixelInsetsToCrop,pixelsToCrop,resizeCrop,sameSourceAspect,sameSourceSize,
  sanitizeTransform,transformEquals,type CropRect,type ScreenshotTransform,
 } from './crop.ts';
 
@@ -67,6 +67,20 @@ test('normalized crop converts to and from source pixels',()=>{
  assert.deepEqual(px,{x:120,y:480,width:600,height:960});
  const back=pixelsToCrop(px,1200,2400);
  assert.deepEqual(back,crop);
+});
+
+test('normalized crop converts to exact integer pixel insets and maps them to another size',()=>{
+ const insets=cropToPixelInsets({x:.1,y:.2,width:.7,height:.6},1000,2000);
+ assert.deepEqual(insets,{left:100,top:400,right:200,bottom:400});
+ assert.deepEqual(pixelInsetsToCrop(insets!,2000,3000),{x:.05,y:400/3000,width:1700/2000,height:2200/3000});
+});
+
+test('pixel inset helpers reject invalid dimensions and crops that consume the target',()=>{
+ assert.equal(cropToPixelInsets({x:0,y:0,width:1,height:1},0,100),undefined);
+ assert.equal(pixelInsetsToCrop({left:60,top:0,right:40,bottom:0},100,100),undefined);
+ assert.equal(pixelInsetsToCrop({left:0,top:60,right:0,bottom:40},100,100),undefined);
+ const edge=cropToPixelInsets({x:.1,y:.1,width:.7,height:.7},3,3);
+ assert.ok(edge&&edge.left>=0&&edge.top>=0&&edge.right>=0&&edge.bottom>=0);
 });
 
 test('fit and fill helpers provide centered valid crops',()=>{
