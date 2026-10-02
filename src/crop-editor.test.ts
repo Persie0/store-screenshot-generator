@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { identityTransform } from './crop.ts';
-import { applyCropPreset,cropEditorMarkup,createCropSession,nudgeCropSession,redoCropSession,setCropSessionTransform,undoCropSession } from './crop-editor.ts';
+import { applyCropPreset,cropEditorMarkup,cropPresetAspect,createCropSession,normalizedRatioForSource,nudgeCropSession,redoCropSession,setCropSessionTransform,undoCropSession } from './crop-editor.ts';
 
 test('crop editor markup exposes the full editing toolset',()=>{
- const html=cropEditorMarkup({sameSizeCount:4,sameAspectCount:5});
+ const html=cropEditorMarkup({sameSizeCount:4,sameAspectCount:5,sourceWidth:1179,sourceHeight:2556});
  for(const label of ['Free','Original','1:1','3:2','2:3','4:3','3:4','5:4','4:5','16:9','9:16','iPhone','Android','Custom','Zoom','Pan X','Pan Y','Rotate left','Rotate right','Straighten','Flip H','Flip V','Fit','Fill','Center','Undo','Redo','Copy crop','Paste crop','Before / after','Rule of thirds','Center guides','Safe area','Apply to all same-size','Apply to same-aspect'])assert.ok(html.includes(label),label);
+ assert.ok(html.includes('aspect-ratio:1179 / 2556'));
 });
 
 test('crop session supports undo and redo without mutating original transform',()=>{
@@ -32,6 +33,14 @@ test('ratio preset is interpreted in source-pixel aspect rather than normalized 
  assert.ok(Math.abs(actualAspect-9/16)<1e-9);
  const square=applyCropPreset(identityTransform(),'1:1',1179,2556);
  assert.ok(Math.abs((square.crop.width*1179)/(square.crop.height*2556)-1)<1e-9);
+});
+
+test('locked pixel aspect converts to normalized crop-space ratio for resize handles',()=>{
+ assert.equal(cropPresetAspect('Free',1179,2556),undefined);
+ assert.equal(cropPresetAspect('Original',1179,2556),1179/2556);
+ assert.equal(cropPresetAspect('9:16',1179,2556),9/16);
+ assert.equal(cropPresetAspect('Custom',1179,2556,2),2);
+ assert.ok(Math.abs(normalizedRatioForSource(9/16,1179,2556)-(9/16)*(2556/1179))<1e-12);
 });
 
 test('Original and Free reset crop while preserving rotation and flips',()=>{
