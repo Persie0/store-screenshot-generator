@@ -40,11 +40,12 @@ export function normalizeRotation(degrees:number):number{
 export function sanitizeTransform(value:unknown):ScreenshotTransform{
  if(!value||typeof value!=='object')return identityTransform();
  const raw=value as Partial<ScreenshotTransform>;
- const cropValue=raw.crop&&typeof raw.crop==='object'?raw.crop:identityTransform().crop;
- const crop=clampCrop({
-  x:finite((cropValue as CropRect).x,0),y:finite((cropValue as CropRect).y,0),
-  width:finite((cropValue as CropRect).width,1),height:finite((cropValue as CropRect).height,1),
- });
+ const cropValue=raw.crop&&typeof raw.crop==='object'?raw.crop as Partial<CropRect>:undefined;
+ if(!cropValue)return identityTransform();
+ const requiredNumbers=[cropValue.x,cropValue.y,cropValue.width,cropValue.height,raw.zoom,raw.panX,raw.panY,raw.rotation];
+ if(requiredNumbers.some(v=>v!==undefined&&(typeof v!=='number'||!Number.isFinite(v))))return identityTransform();
+ if(typeof cropValue.width==='number'&&cropValue.width<=0||typeof cropValue.height==='number'&&cropValue.height<=0)return identityTransform();
+ const crop=clampCrop({x:finite(cropValue.x,0),y:finite(cropValue.y,0),width:finite(cropValue.width,1),height:finite(cropValue.height,1)});
  const pan=clampPan(finite(raw.panX,0),finite(raw.panY,0));
  return {crop,zoom:clampZoom(finite(raw.zoom,1)),...pan,rotation:normalizeRotation(finite(raw.rotation,0)),flipX:raw.flipX===true,flipY:raw.flipY===true};
 }
@@ -54,10 +55,8 @@ export function applyAspectRatio(rect:CropRect,ratio:number,anchor:CropAnchor='c
  let width=r.width,height=r.height;
  if(width/height>ratio)width=height*ratio;else height=width/ratio;
  if(width>1){width=1;height=1/ratio}if(height>1){height=1;width=ratio}
- let x=r.x,y=r.y;
- const dx=r.width-width,dy=r.height-height;
- if(anchor==='center'){x+=dx/2;y+=dy/2}
- else {if(anchor==='ne'||anchor==='se')x+=dx;if(anchor==='sw'||anchor==='se')y+=dy}
+ let x=r.x,y=r.y;const dx=r.width-width,dy=r.height-height;
+ if(anchor==='center'){x+=dx/2;y+=dy/2}else{if(anchor==='ne'||anchor==='se')x+=dx;if(anchor==='sw'||anchor==='se')y+=dy}
  return clampCrop({x,y,width,height});
 }
 
@@ -67,56 +66,29 @@ export function moveCrop(rect:CropRect,dx:number,dy:number):CropRect{
 
 export function resizeCrop(rect:CropRect,handle:CropHandle,dx:number,dy:number,ratio?:number):CropRect{
  const r=clampCrop(rect),east=handle.includes('e'),west=handle.includes('w'),north=handle.includes('n'),south=handle.includes('s');
- let left=r.x,top=r.y,right=r.x+r.width,bottom=r.y+r.height;
- const xDelta=finite(dx,0),yDelta=finite(dy,0);
+ let left=r.x,top=r.y,right=r.x+r.width,bottom=r.y+r.height;const xDelta=finite(dx,0),yDelta=finite(dy,0);
  if(west)left+=xDelta;if(east)right+=xDelta;if(north)top+=yDelta;if(south)bottom+=yDelta;
  let out=clampCrop({x:Math.min(left,right-MIN_CROP_SIZE),y:Math.min(top,bottom-MIN_CROP_SIZE),width:Math.abs(right-left),height:Math.abs(bottom-top)});
- if(ratio&&Number.isFinite(ratio)&&ratio>0){
-  const anchor:CropAnchor=west&&north?'se':east&&north?'sw':west&&south?'ne':east&&south?'nw':'center';
-  out=applyAspectRatio(out,ratio,anchor);
- }
+ if(ratio&&Number.isFinite(ratio)&&ratio>0){const anchor:CropAnchor=west&&north?'se':east&&north?'sw':west&&south?'ne':east&&south?'nw':'center';out=applyAspectRatio(out,ratio,anchor)}
  return out;
 }
 
 export function cropToPixels(crop:CropRect,sourceWidth:number,sourceHeight:number):PixelRect{
- const c=clampCrop(crop),w=Math.max(1,finite(sourceWidth,1)),h=Math.max(1,finite(sourceHeight,1));
- return {x:clean(c.x*w),y:clean(c.y*h),width:clean(c.width*w),height:clean(c.height*h)};
+ const c=clampCrop(crop),w=Math.max(1,finite(sourceWidth,1)),h=Math.max(1,finite(sourceHeight,1));return {x:clean(c.x*w),y:clean(c.y*h),width:clean(c.width*w),height:clean(c.height*h)};
 }
-
 export function pixelsToCrop(rect:PixelRect,sourceWidth:number,sourceHeight:number):CropRect{
- const w=Math.max(1,finite(sourceWidth,1)),h=Math.max(1,finite(sourceHeight,1));
- return clampCrop({x:finite(rect.x,0)/w,y:finite(rect.y,0)/h,width:finite(rect.width,w)/w,height:finite(rect.height,h)/h});
+ const w=Math.max(1,finite(sourceWidth,1)),h=Math.max(1,finite(sourceHeight,1));return clampCrop({x:finite(rect.x,0)/w,y:finite(rect.y,0)/h,width:finite(rect.width,w)/w,height:finite(rect.height,h)/h});
 }
-
 export function fitCrop():CropRect{return {x:0,y:0,width:1,height:1}}
-
 export function fillCrop(sourceWidth:number,sourceHeight:number,targetAspect:number):CropRect{
- const sw=Math.max(1,finite(sourceWidth,1)),sh=Math.max(1,finite(sourceHeight,1));
- if(!Number.isFinite(targetAspect)||targetAspect<=0)return fitCrop();
- const sourceAspect=sw/sh;
- let width=1,height=1;
- if(sourceAspect>targetAspect)width=targetAspect/sourceAspect;else height=sourceAspect/targetAspect;
+ const sw=Math.max(1,finite(sourceWidth,1)),sh=Math.max(1,finite(sourceHeight,1));if(!Number.isFinite(targetAspect)||targetAspect<=0)return fitCrop();
+ const sourceAspect=sw/sh;let width=1,height=1;if(sourceAspect>targetAspect)width=targetAspect/sourceAspect;else height=sourceAspect/targetAspect;
  return {x:clean((1-width)/2),y:clean((1-height)/2),width:clean(width),height:clean(height)};
 }
-
-export function sameSourceSize(a:SourceSized,b:SourceSized):boolean{
- return !!a.sourceWidth&&!!a.sourceHeight&&a.sourceWidth===b.sourceWidth&&a.sourceHeight===b.sourceHeight;
-}
-
-export function sameSourceAspect(a:SourceSized,b:SourceSized,epsilon=1e-6):boolean{
- if(!a.sourceWidth||!a.sourceHeight||!b.sourceWidth||!b.sourceHeight)return false;
- return Math.abs(a.sourceWidth/a.sourceHeight-b.sourceWidth/b.sourceHeight)<=epsilon;
-}
-
-export function canApplyTransform(source:SourceSized,target:SourceSized,mode:'same-size'|'same-aspect'):boolean{
- return mode==='same-size'?sameSourceSize(source,target):sameSourceAspect(source,target);
-}
-
-export function transformEquals(a:ScreenshotTransform|undefined,b:ScreenshotTransform|undefined):boolean{
- const left=sanitizeTransform(a),right=sanitizeTransform(b);
- return JSON.stringify(left)===JSON.stringify(right);
-}
-
+export function sameSourceSize(a:SourceSized,b:SourceSized):boolean{return !!a.sourceWidth&&!!a.sourceHeight&&a.sourceWidth===b.sourceWidth&&a.sourceHeight===b.sourceHeight}
+export function sameSourceAspect(a:SourceSized,b:SourceSized,epsilon=1e-6):boolean{if(!a.sourceWidth||!a.sourceHeight||!b.sourceWidth||!b.sourceHeight)return false;return Math.abs(a.sourceWidth/a.sourceHeight-b.sourceWidth/b.sourceHeight)<=epsilon}
+export function canApplyTransform(source:SourceSized,target:SourceSized,mode:'same-size'|'same-aspect'):boolean{return mode==='same-size'?sameSourceSize(source,target):sameSourceAspect(source,target)}
+export function transformEquals(a:ScreenshotTransform|undefined,b:ScreenshotTransform|undefined):boolean{return JSON.stringify(sanitizeTransform(a))===JSON.stringify(sanitizeTransform(b))}
 export function copyTransform(transform:ScreenshotTransform|undefined):ScreenshotTransform{return structuredClone(sanitizeTransform(transform))}
 export function resetCrop(transform:ScreenshotTransform|undefined):ScreenshotTransform{return {...sanitizeTransform(transform),crop:fitCrop(),zoom:1,panX:0,panY:0}}
 export function resetAllTransforms():ScreenshotTransform{return identityTransform()}
