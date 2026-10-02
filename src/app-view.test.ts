@@ -20,7 +20,7 @@ test('onboarding exposes explicit create flow and back-to-projects for returning
 });
 
 test('studio exposes exact export preview, crop controls, screen navigation and export',()=>{
- const html=studioMarkup(p(),0,'en',STORE_SIZES[0].key,['blob:one','blob:two']);
+ const project=p(),html=studioMarkup(project,0,'en',STORE_SIZES[0].key,['blob:one','blob:two']);
  assert.ok(html.includes('id="exact-preview"'));
  assert.ok(html.includes('id="preview-size-select"'));
  assert.ok(html.includes('data-crop-screen="s1"'));
@@ -29,8 +29,10 @@ test('studio exposes exact export preview, crop controls, screen navigation and 
  assert.ok(html.includes('id="add-screens"'));
  assert.ok(html.includes('id="headline-input"'));
  assert.ok(html.includes('id="subheadline-input"'));
- assert.ok(html.includes('Approve English'));
+ assert.ok(html.includes('Update translations'));
  assert.ok(html.includes('original screenshot'));
+ project.translations=undefined;project.englishApproved=false;project.status='needs-approval';
+ assert.ok(studioMarkup(project,0,'en',STORE_SIZES[0].key,['blob:one','blob:two']).includes('Approve English'));
 });
 
 test('studio renders translated copy without changing the underlying English source',()=>{
