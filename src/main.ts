@@ -11,7 +11,7 @@ const root=$<HTMLDivElement>('#root');
 
 let apiKey='',projects:Project[]=[],project:Project|undefined,activeScreen=0,locale='en',device:'iphone'|'android'='iphone',urls:string[]=[],previewUrl='',renderVersion=0,saveTimer=0,previewTimer=0;
 const statusNames:Record<string,string>={analyzing:'Analyzing screenshots', 'needs-approval':'English design ready','translating':'Translating approved copy',ready:'Translations ready',error:'Needs attention'};
-function esc(s:string){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]!))}
+function esc(s:string){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!))}
 function safe(s:string){return s.normalize('NFKD').replace(/[^\p{L}\p{N}._-]+/gu,'-').replace(/^-+|-+$/g,'').slice(0,70)||'app'}
 function palette():Palette{return project?.analysis?.palette||{accent:'#4857d9',ink:'#20243a',paper:'#f3f2ec',secondary:'#a8d6c4'}}
 function copyFor(screen:ProjectShot):Translation {if(locale==='en')return {headline:screen.headline,subheadline:screen.subheadline};return project?.translations?.[locale]?.[screen.id]||{headline:screen.headline,subheadline:screen.subheadline}}
