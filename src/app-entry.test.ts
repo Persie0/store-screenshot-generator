@@ -17,6 +17,12 @@ test('browser entrypoint uses the tested dashboard/crop app and no legacy main r
  assert.match(app,/applyTransformToMatchingShots/);
 });
 
+test('crop header keeps Apply readable as a primary action',()=>{
+ const css=readFileSync(join(root,'src/app-features.css'),'utf8');
+ assert.match(css,/\.crop-head-actions \.primary-btn\{[^}]*background:var\(--blue\)[^}]*color:#fff[^}]*border-color:var\(--blue\)[^}]*\}/);
+ assert.match(css,/\.crop-head-actions \.primary-btn:hover/);
+});
+
 test('every production TypeScript module has a dedicated test or explicit entrypoint smoke coverage',()=>{
  const src=join(root,'src');
  const modules=readdirSync(src).filter(name=>name.endsWith('.ts')&&!name.endsWith('.test.ts')&&!name.endsWith('.d.ts')&&name!=='test-idb.ts');
