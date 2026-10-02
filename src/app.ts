@@ -17,7 +17,7 @@ const root=document.querySelector<HTMLDivElement>('#root')!;
 const $=<T extends HTMLElement>(selector:string)=>document.querySelector<T>(selector);
 const $$=<T extends HTMLElement>(selector:string)=>Array.from(document.querySelectorAll<T>(selector));
 
-let apiKey='',projects:Project[]=[],project:Project|undefined,activeScreen=0,locale='en',previewSizeKey=STORE_SIZES[0].key;
+let apiKey='',projects:Project[]=[],project:Project|undefined,activeScreen=0,locale='en',previewSizeKey:string=STORE_SIZES[0].key;
 let projectUrls:string[]=[],dashboardUrls:string[]=[],previewUrl='',previewVersion=0,saveTimer=0;
 const defaultPalette:Palette={accent:'#4857d9',ink:'#20243a',paper:'#f3f2ec',secondary:'#a8d6c4'};
 
