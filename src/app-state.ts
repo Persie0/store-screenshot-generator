@@ -1,5 +1,5 @@
 import { shouldShowDashboard } from './dashboard.ts';
-import { normalizeLocaleCode,selectedTranslationLocales } from './localization.ts';
+import { DEFAULT_TRANSLATION_LOCALES,normalizeLocaleCode,selectedTranslationLocales } from './localization.ts';
 import type { Project, ProjectShot } from './storage.ts';
 import type { Translation } from './studio.ts';
 
@@ -17,8 +17,9 @@ export function updateScreenCopy(project:Project,shotId:string,locale:string,fie
 }
 export function setTranslationLocaleSelected(project:Project,locale:string,selected:boolean,now:number):Project{
  const code=normalizeLocaleCode(locale);if(!code||code==='en')return project;
- if(project.localizedLocales&&!project.localizedLocales.includes(code))return project;
+ const available=project.localizedLocales||['en',...DEFAULT_TRANSLATION_LOCALES];
+ if(!available.includes(code))return project;
  const current=selectedTranslationLocales(project),has=current.includes(code);if(has===selected)return project;
  const translationLocales=selected?[...current,code]:current.filter(item=>item!==code);
- return {...project,translationLocales,sourceLocale:'en',updatedAt:now};
+ return {...project,localizedLocales:[...available],translationLocales,sourceLocale:'en',updatedAt:now};
 }
