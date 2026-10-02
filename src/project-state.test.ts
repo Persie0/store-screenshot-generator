@@ -8,7 +8,7 @@ function makeProject():Project{
  const transform={...identityTransform(),crop:{x:.1,y:.1,width:.8,height:.8}};
  return {
   id:'p1',name:'Demo',createdAt:1,updatedAt:2,status:'ready',englishApproved:true,
-  analysis:{appSummary:'a',appCategory:'b',designStyle:'c',layoutMood:'minimal',audience:'d',palette:{accent:'#111111',ink:'#222222',paper:'#ffffff',secondary:'#eeeeee'},screens:[]},
+  analysis:{appSummary:'a',appCategory:'b',designStyle:'c',layoutMood:'minimal',audience:'d',palette:{accent:'#111111',ink:'#222222',paper:'#ffffff',secondary:'#eeeeee'},screens:[{id:'s1',headline:'One',subheadline:'First',detectedText:['UI'],overlapWarning:''}]},
   translations:{de:{s1:{headline:'Hallo',subheadline:'Welt'}}},
   screens:[
    {id:'s1',name:'1.png',blob:new Blob(['1']),headline:'One',subheadline:'First',sourceWidth:1179,sourceHeight:2556,transform},
@@ -28,7 +28,7 @@ test('renameProject trims, caps the name, and updates only project metadata',()=
  assert.equal(p.name,'Demo');
 });
 
-test('duplicateProject assigns new project/screen IDs while preserving content and deep-copying transforms',()=>{
+test('duplicateProject assigns new IDs and remaps analysis/translations to the duplicate screens',()=>{
  const p=makeProject();
  const duplicate=duplicateProject(p,'p2',['n1','n2','n3','n4'],200);
  assert.equal(duplicate.id,'p2');
@@ -37,8 +37,12 @@ test('duplicateProject assigns new project/screen IDs while preserving content a
  assert.equal(duplicate.screens[0].blob,p.screens[0].blob);
  assert.deepEqual(duplicate.screens[0].transform,p.screens[0].transform);
  assert.notEqual(duplicate.screens[0].transform,p.screens[0].transform);
- assert.deepEqual(duplicate.analysis,p.analysis);
- assert.deepEqual(duplicate.translations,p.translations);
+ assert.equal(duplicate.analysis?.screens[0].id,'n1');
+ assert.equal(duplicate.analysis?.screens[0].headline,'One');
+ assert.deepEqual(duplicate.translations?.de.n1,{headline:'Hallo',subheadline:'Welt'});
+ assert.equal(duplicate.translations?.de.s1,undefined);
+ assert.equal(p.analysis?.screens[0].id,'s1');
+ assert.deepEqual(p.translations?.de.s1,{headline:'Hallo',subheadline:'Welt'});
 });
 
 test('setShotTransform changes only the requested screenshot and leaves Gemini state intact',()=>{
