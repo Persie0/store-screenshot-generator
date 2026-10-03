@@ -39,6 +39,21 @@ test('browser entrypoint restores and persists one Gemini API key across project
  assert.ok(!view.includes('Held in memory for this browser session only.'));
 });
 
+test('browser entrypoint wires phone frame state, shared presentation rendering, and creative regeneration',()=>{
+ const app=readFileSync(join(root,'src/app.ts'),'utf8');
+ for(const token of ['resolveScreenPresentation','setPhoneColorMode','setManualPhoneColor','applyRegeneratedCreative','regenerateScreenCreative','regenerationModalMarkup'])assert.match(app,new RegExp(token));
+ assert.match(app,/data-phone-mode/);
+ assert.match(app,/phone-color-picker/);
+ assert.match(app,/phone-color-hex/);
+ assert.match(app,/reset-phone-color/);
+ assert.match(app,/regenerate-creative/);
+ assert.match(app,/run-regeneration/);
+ assert.match(app,/resolveScreenPresentation\(project,shot\.id,defaultPalette\)/);
+ assert.match(app,/renderStoreAsset\([^;]+phoneColor:/s);
+ assert.match(app,/locale='en'/);
+ assert.match(app,/loadApiKey\(localStorage\)/);
+});
+
 test('crop header keeps Apply readable as a primary action',()=>{
  const css=readFileSync(join(root,'src/app-features.css'),'utf8');
  assert.match(css,/\.crop-head-actions \.primary-btn\{[^}]*background:var\(--blue\)[^}]*color:#fff[^}]*border-color:var\(--blue\)[^}]*\}/);
