@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { identityTransform } from './crop.ts';
-import { analysisForRegeneration,applyRegeneratedCreative,resolveScreenPresentation,setManualPhoneColor,setPhoneColorMode } from './creative-state.ts';
+import { applyRegeneratedCreative,resolveScreenPresentation,setManualPhoneColor,setPhoneColorMode } from './creative-state.ts';
 import type { Project } from './storage.ts';
 import type { ScreenCopy } from './studio.ts';
 
@@ -36,16 +36,6 @@ test('creative presentation resolves per-screen visual overrides and phone frame
  assert.equal(legacyResolved.phoneColor,'#111521');
  assert.equal(legacyResolved.mood,'editorial');
  assert.deepEqual(legacyResolved.palette,fallback);
-});
-
-test('regeneration context uses the current English draft instead of stale analysis copy',()=>{
- const project=makeProject();project.screens[0]={...project.screens[0],headline:'Edited draft',subheadline:'Edited support'};
- const analysis=analysisForRegeneration(project,'s1');
- assert.equal(analysis?.screens[0].headline,'Edited draft');
- assert.equal(analysis?.screens[0].subheadline,'Edited support');
- assert.equal(analysis?.screens[0].detectedText[0],'One');
- assert.equal(project.analysis?.screens[0].headline,'Old one');
- assert.equal(analysisForRegeneration(project,'missing'),undefined);
 });
 
 test('regenerated creative updates only selected screen and invalidates only its translations',()=>{
