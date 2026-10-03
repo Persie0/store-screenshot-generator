@@ -41,3 +41,9 @@ test('regeneration accepts a visual-only change but rejects an unchanged result'
  const unchanged=(async()=>new Response(JSON.stringify({output_text:JSON.stringify({id:'s1',headline:'See your world',subheadline:'Track every country',detectedText:['Countries','Map'],overlapWarning:'',phoneColor:'#112233',layoutMood:'minimal',palette:analysis.palette})}),{status:200})) as typeof fetch;
  await assert.rejects(regenerateScreenCreative('key','NomadRank',analysis,{id:'s1',name:'map.png',blob:new Blob(['x'],{type:'image/png'})},'',unchanged),/same creative|different/i);
 }));
+
+test('regeneration does not count explicit project defaults as a visual change',async()=>withImageEnv(async()=>{
+ const analysis=baseAnalysis();analysis.screens[0].phoneColor=undefined;analysis.screens[0].layoutMood=undefined;analysis.screens[0].palette=undefined;
+ const sameEffective=(async()=>new Response(JSON.stringify({output_text:JSON.stringify({id:'s1',headline:'See your world',subheadline:'Track every country',detectedText:['Countries','Map'],overlapWarning:'',phoneColor:'#111521',layoutMood:analysis.layoutMood,palette:analysis.palette})}),{status:200})) as typeof fetch;
+ await assert.rejects(regenerateScreenCreative('key','NomadRank',analysis,{id:'s1',name:'map.png',blob:new Blob(['x'],{type:'image/png'})},'',sameEffective),/same creative|different/i);
+}));
