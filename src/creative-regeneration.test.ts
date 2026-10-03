@@ -33,6 +33,13 @@ test('creative regeneration sends exact suggestion and returns validated visual 
  assert.equal(creative.phoneColor,'#AABBCC');assert.equal(creative.layoutMood,'playful');assert.deepEqual(creative.palette,{accent:'#ABCDEF',ink:'#101010',paper:'#F0F0F0',secondary:'#CCCCCC'});
 }));
 
+test('regeneration uses the current screenshot English draft instead of stale analysis copy',async()=>withImageEnv(async()=>{
+ const analysis=baseAnalysis();let prompt='';
+ const fetcher=(async(_input:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));prompt=body.input[0].text;return new Response(JSON.stringify({output_text:JSON.stringify({id:'s1',headline:'Another angle',subheadline:'Fresh support',detectedText:['Countries','Map'],overlapWarning:'',phoneColor:'#334455'})}),{status:200})}) as typeof fetch;
+ await regenerateScreenCreative('key','NomadRank',analysis,{id:'s1',name:'map.png',blob:new Blob(['x'],{type:'image/png'}),headline:'Edited draft',subheadline:'Edited support'},'',fetcher);
+ assert.match(prompt,/headline=Edited draft/);assert.match(prompt,/supporting line=Edited support/);assert.ok(!prompt.includes('headline=See your world; supporting line=Track every country'));
+}));
+
 test('regeneration accepts a visual-only change but rejects an unchanged result',async()=>withImageEnv(async()=>{
  const analysis=baseAnalysis();let emptyPrompt='';
  const visualOnly=(async(_input:RequestInfo|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));emptyPrompt=body.input[0].text;return new Response(JSON.stringify({output_text:JSON.stringify({id:'s1',headline:'See your world',subheadline:'Track every country',detectedText:['Countries','Map'],overlapWarning:'',phoneColor:'#445566',layoutMood:'minimal',palette:analysis.palette})}),{status:200})}) as typeof fetch;
