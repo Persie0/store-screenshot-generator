@@ -13,8 +13,8 @@ function validPalette(value:unknown):value is Palette{
 
 export function resolveScreenPresentation(project:Project,shotId:string,fallbackPalette:Palette):ScreenPresentation{
  const screen=project.analysis?.screens.find(item=>item.id===shotId) as CreativeScreen|undefined;
- const projectPalette=project.analysis?.palette;
- const palette=validPalette(screen?.palette)?screen.palette:validPalette(projectPalette)?projectPalette:fallbackPalette;
+ const screenPalette=screen?.palette,projectPalette=project.analysis?.palette;
+ const palette=validPalette(screenPalette)?screenPalette:validPalette(projectPalette)?projectPalette:fallbackPalette;
  const mood:LayoutMood=screen?.layoutMood==='minimal'||screen?.layoutMood==='bold'||screen?.layoutMood==='playful'||screen?.layoutMood==='editorial'?screen.layoutMood:project.analysis?.layoutMood||'editorial';
  return {phoneColor:resolvePhoneColor(project.phoneColorMode,project.phoneColor,screen?.phoneColor),palette,mood};
 }
@@ -31,8 +31,9 @@ export function setManualPhoneColor(project:Project,color:string,now:number):Pro
 
 export function applyRegeneratedCreative(project:Project,shotId:string,creative:ScreenCopy,now:number):Project{
  if(!project.analysis||!project.screens.some(screen=>screen.id===shotId)||!project.analysis.screens.some(screen=>screen.id===shotId))return project;
- const screens=project.screens.map(screen=>screen.id===shotId?{...screen,headline:creative.headline,subheadline:creative.subheadline,edited:false}:screen);
- const analysis={...project.analysis,screens:project.analysis.screens.map(screen=>screen.id===shotId?creative:screen)};
+ const normalizedCreative={...creative,id:shotId};
+ const screens=project.screens.map(screen=>screen.id===shotId?{...screen,headline:normalizedCreative.headline,subheadline:normalizedCreative.subheadline,edited:false}:screen);
+ const analysis={...project.analysis,screens:project.analysis.screens.map(screen=>screen.id===shotId?normalizedCreative:screen)};
  let translations=project.translations;
  if(translations){
   translations=Object.fromEntries(Object.entries(translations).map(([locale,byScreen])=>{
