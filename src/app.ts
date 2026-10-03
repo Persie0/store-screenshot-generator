@@ -11,7 +11,7 @@ import { dashboardMarkup } from './dashboard.ts';
 import { onboardingMarkup,regenerationModalMarkup,studioMarkup } from './app-view.ts';
 import { copyFor,initialRoute,setTranslationLocaleSelected,updateScreenCopy } from './app-state.ts';
 import { applyTransformToMatchingShots,duplicateProject,renameProject as renameProjectState,setShotTransform } from './project-state.ts';
-import { applyRegeneratedCreative,resolveScreenPresentation,setManualPhoneColor,setPhoneColorMode } from './creative-state.ts';
+import { analysisForRegeneration,applyRegeneratedCreative,resolveScreenPresentation,setManualPhoneColor,setPhoneColorMode } from './creative-state.ts';
 import { normalizeHexColor } from './phone-frame.ts';
 import { identityTransform } from './crop.ts';
 import { mountCropEditor } from './crop-editor.ts';
@@ -120,10 +120,10 @@ function openRegenerationModal(initialSuggestion=''){
 }
 
 async function runRegeneration(suggestion:string){
- if(!project?.analysis)return;const before=project,shot=before.screens[activeScreen];if(!shot)return;
+ if(!project?.analysis)return;const before=project,shot=before.screens[activeScreen];if(!shot)return;const regenerationAnalysis=analysisForRegeneration(before,shot.id);if(!regenerationAnalysis){editorNotice='Regeneration failed: This screenshot is missing its current analysis.';renderStudio();return}
  if(!apiKey){openKeyDialog(()=>void runRegeneration(suggestion));return}
  apiKey=saveApiKey(apiKey,localStorage);const progress=showWorking(before.name,'Regenerating this creative',45);
- try{const creative=await regenerateScreenCreative(apiKey,before.name,before.analysis,shot,suggestion,fetch,progress);project=applyRegeneratedCreative(before,shot.id,creative,Date.now());locale='en';await saveProject(project);await reloadProjects();openCurrentProject()}catch(error){project=before;editorNotice=`Regeneration failed: ${errorText(error)}`;openCurrentProject()}
+ try{const creative=await regenerateScreenCreative(apiKey,before.name,regenerationAnalysis,shot,suggestion,fetch,progress);project=applyRegeneratedCreative(before,shot.id,creative,Date.now());locale='en';await saveProject(project);await reloadProjects();openCurrentProject()}catch(error){project=before;editorNotice=`Regeneration failed: ${errorText(error)}`;openCurrentProject()}
 }
 
 async function importLocalizationFile(file:File){
