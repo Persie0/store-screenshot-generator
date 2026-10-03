@@ -1,6 +1,6 @@
 import { normalizeHexColor,resolvePhoneColor,type PhoneColorMode } from './phone-frame.ts';
 import type { Project } from './storage.ts';
-import type { LayoutMood,Palette,ScreenCopy } from './studio.ts';
+import type { Analysis,LayoutMood,Palette,ScreenCopy } from './studio.ts';
 
 export type ScreenPresentation={phoneColor:string;palette:Palette;mood:LayoutMood};
 type CreativeScreen=ScreenCopy&{phoneColor?:string;layoutMood?:LayoutMood;palette?:Palette};
@@ -27,6 +27,13 @@ export function setPhoneColorMode(project:Project,mode:PhoneColorMode,now:number
 export function setManualPhoneColor(project:Project,color:string,now:number):Project{
  const normalized=normalizeHexColor(color);if(!normalized||project.phoneColor===normalized)return project;
  return {...project,phoneColor:normalized,updatedAt:now};
+}
+
+export function analysisForRegeneration(project:Project,shotId:string):Analysis|undefined{
+ if(!project.analysis)return undefined;
+ const shot=project.screens.find(screen=>screen.id===shotId),source=project.analysis.screens.find(screen=>screen.id===shotId);
+ if(!shot||!source)return undefined;
+ return {...project.analysis,screens:project.analysis.screens.map(screen=>screen.id===shotId?{...screen,headline:shot.headline,subheadline:shot.subheadline}:screen)};
 }
 
 export function applyRegeneratedCreative(project:Project,shotId:string,creative:ScreenCopy,now:number):Project{
