@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { identityTransform } from './crop.ts';
-import { applyRegeneratedCreative,resolveScreenPresentation,setManualPhoneColor,setPhoneColorMode } from './creative-state.ts';
+import { analysisForRegeneration,applyRegeneratedCreative,resolveScreenPresentation,setManualPhoneColor,setPhoneColorMode } from './creative-state.ts';
 import type { Project } from './storage.ts';
 import type { ScreenCopy } from './studio.ts';
 
@@ -38,6 +38,16 @@ test('creative presentation resolves per-screen visual overrides and phone frame
  assert.deepEqual(legacyResolved.palette,fallback);
 });
 
+test('regeneration context uses the current English draft without mutating saved analysis',()=>{
+ const project=makeProject();project.screens[0]={...project.screens[0],headline:'Edited draft',subheadline:'Edited support'};
+ const analysis=analysisForRegeneration(project,'s1');
+ assert.equal(analysis?.screens[0].headline,'Edited draft');
+ assert.equal(analysis?.screens[0].subheadline,'Edited support');
+ assert.equal(analysis?.screens[0].detectedText[0],'One');
+ assert.equal(project.analysis?.screens[0].headline,'Old one');
+ assert.equal(analysisForRegeneration(project,'missing'),undefined);
+});
+
 test('regenerated creative updates only selected screen and invalidates only its translations',()=>{
  const project=makeProject();
  const originalShot=project.screens[0];
@@ -50,6 +60,7 @@ test('regenerated creative updates only selected screen and invalidates only its
  assert.equal(updated.screens[0].sourceWidth,originalShot.sourceWidth);
  assert.equal(updated.analysis?.screens.find(s=>s.id==='s1')?.phoneColor,'#FEDCBA');
  assert.equal(updated.analysis?.screens.find(s=>s.id==='s2')?.headline,'Old two');
+ assert.equal(updated.analysis?.screens.find(s=>s.id==='s2')?.phoneColor,'#654321');
  assert.equal(updated.englishApproved,false);
  assert.equal(updated.status,'needs-approval');
  assert.equal(updated.translations?.de?.s1,undefined);
@@ -62,6 +73,15 @@ test('regenerated creative updates only selected screen and invalidates only its
  assert.equal(updated.phoneColor,'#445566');
  assert.equal(updated.updatedAt,99);
  assert.equal(applyRegeneratedCreative(project,'missing',creative,100),project);
+});
+
+test('regeneration preserves a manual project frame override',()=>{
+ const project={...makeProject(),phoneColorMode:'manual' as const,phoneColor:'#AABBCC'};
+ const creative:ScreenCopy={id:'s1',headline:'Fresh',subheadline:'New',detectedText:[],overlapWarning:'',phoneColor:'#FEDCBA'};
+ const updated=applyRegeneratedCreative(project,'s1',creative,102);
+ assert.equal(updated.phoneColorMode,'manual');
+ assert.equal(updated.phoneColor,'#AABBCC');
+ assert.equal(updated.analysis?.screens.find(s=>s.id==='s2')?.phoneColor,'#654321');
 });
 
 test('regeneration cannot replace the selected analysis screen id',()=>{
