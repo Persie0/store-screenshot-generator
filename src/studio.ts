@@ -1,4 +1,4 @@
-import { normalizeHexColor } from './phone-frame.ts';
+import { DEFAULT_PHONE_COLOR,normalizeHexColor } from './phone-frame.ts';
 
 export const GEMINI_MODEL = 'gemini-3.8-flash';
 export const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/interactions';
@@ -155,7 +155,7 @@ function optionalPalette(value:unknown):Palette|undefined{
  const values=[p.accent,p.ink,p.paper,p.secondary];if(values.some(color=>!normalizeHexColor(color)))return undefined;
  return {accent:normalizeHexColor(p.accent)!,ink:normalizeHexColor(p.ink)!,paper:normalizeHexColor(p.paper)!,secondary:normalizeHexColor(p.secondary)!};
 }
-function samePalette(a:Palette|undefined,b:Palette|undefined):boolean{return JSON.stringify(a||null)===JSON.stringify(b||null)}
+function samePalette(a:Palette,b:Palette):boolean{return a.accent===b.accent&&a.ink===b.ink&&a.paper===b.paper&&a.secondary===b.secondary}
 function normalizedCopy(text:string):string{return text.toLocaleLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim()}
 
 export async function regenerateScreenCreative(apiKey:string,appName:string,analysis:Analysis,screenshot:ScreenshotInput,suggestion:string,fetcher:typeof fetch=fetch,onProgress?:GeminiProgressCallback):Promise<ScreenCopy> {
@@ -168,12 +168,16 @@ export async function regenerateScreenCreative(apiKey:string,appName:string,anal
  const result=await requestGeminiJson<Partial<ScreenCopy>>(apiKey,prompt,[imagePart],fetcher,onProgress);
  if(!result.headline?.trim()||!result.subheadline?.trim()||!Array.isArray(result.detectedText))throw new Error('Gemini did not return complete regenerated copy and screenshot text detection. Please retry.');
  const detectedText=result.detectedText.filter((text):text is string=>typeof text==='string'&&!!text.trim());
- const phoneColor=normalizeHexColor(result.phoneColor)||normalizeHexColor(previous.phoneColor);
- const layoutMood=validMood(result.layoutMood)||validMood(previous.layoutMood);
- const palette=optionalPalette(result.palette)||optionalPalette(previous.palette);
+ const previousPhoneColor=normalizeHexColor(previous.phoneColor),previousMood=validMood(previous.layoutMood),previousPalette=optionalPalette(previous.palette);
+ const phoneColor=normalizeHexColor(result.phoneColor)||previousPhoneColor;
+ const layoutMood=validMood(result.layoutMood)||previousMood;
+ const palette=optionalPalette(result.palette)||previousPalette;
  const headline=result.headline.trim(),subheadline=result.subheadline.trim();
  const copyChanged=normalizedCopy(headline)!==normalizedCopy(previous.headline)||normalizedCopy(subheadline)!==normalizedCopy(previous.subheadline);
- const visualChanged=phoneColor!==normalizeHexColor(previous.phoneColor)||layoutMood!==validMood(previous.layoutMood)||!samePalette(palette,optionalPalette(previous.palette));
+ const oldEffectivePhone=previousPhoneColor||DEFAULT_PHONE_COLOR,newEffectivePhone=phoneColor||DEFAULT_PHONE_COLOR;
+ const oldEffectiveMood=previousMood||analysis.layoutMood,newEffectiveMood=layoutMood||analysis.layoutMood;
+ const oldEffectivePalette=previousPalette||analysis.palette,newEffectivePalette=palette||analysis.palette;
+ const visualChanged=newEffectivePhone!==oldEffectivePhone||newEffectiveMood!==oldEffectiveMood||!samePalette(newEffectivePalette,oldEffectivePalette);
  if(!copyChanged&&!visualChanged)throw new Error('Gemini returned the same creative. Please regenerate again for a different alternative.');
  const overlap=scanCopy(`${headline} ${subheadline}`,detectedText.join(' '));
  const modelWarning=typeof result.overlapWarning==='string'?result.overlapWarning.trim():'';
