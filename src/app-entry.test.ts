@@ -29,6 +29,16 @@ test('browser entrypoint wires local Flutter locale import, selected translation
  assert.match(app,/same-pixels/);
 });
 
+test('browser entrypoint restores and persists one Gemini API key across projects',()=>{
+ const app=readFileSync(join(root,'src/app.ts'),'utf8');
+ const view=readFileSync(join(root,'src/app-view.ts'),'utf8');
+ assert.match(app,/\.\/api-key\.ts/);
+ assert.match(app,/loadApiKey\(localStorage\)/);
+ assert.match(app,/saveApiKey\(/);
+ assert.match(view,/Saved in this browser/);
+ assert.ok(!view.includes('Held in memory for this browser session only.'));
+});
+
 test('crop header keeps Apply readable as a primary action',()=>{
  const css=readFileSync(join(root,'src/app-features.css'),'utf8');
  assert.match(css,/\.crop-head-actions \.primary-btn\{[^}]*background:var\(--blue\)[^}]*color:#fff[^}]*border-color:var\(--blue\)[^}]*\}/);
