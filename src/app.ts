@@ -1,15 +1,18 @@
 import './style.css';
 import './app-features.css';
 import './localization.css';
-import { analyzeScreenshots,scanCopy,validateUploads,type GeminiProgress,type Palette } from './studio.ts';
+import './creative-controls.css';
+import { analyzeScreenshots,regenerateScreenCreative,scanCopy,validateUploads,type GeminiProgress,type Palette } from './studio.ts';
 import { deleteProject,getProject,listProjects,projectManifest,saveProject,type Project,type ProjectShot } from './storage.ts';
 import { createZip,type ZipFile } from './archive.ts';
 import { STORE_SIZES } from './platform.ts';
 import { renderStoreAsset } from './render.ts';
 import { dashboardMarkup } from './dashboard.ts';
-import { onboardingMarkup,studioMarkup } from './app-view.ts';
+import { onboardingMarkup,regenerationModalMarkup,studioMarkup } from './app-view.ts';
 import { copyFor,initialRoute,setTranslationLocaleSelected,updateScreenCopy } from './app-state.ts';
 import { applyTransformToMatchingShots,duplicateProject,renameProject as renameProjectState,setShotTransform } from './project-state.ts';
+import { applyRegeneratedCreative,resolveScreenPresentation,setManualPhoneColor,setPhoneColorMode } from './creative-state.ts';
+import { normalizeHexColor } from './phone-frame.ts';
 import { identityTransform } from './crop.ts';
 import { mountCropEditor } from './crop-editor.ts';
 import { exportLocales,makeTextCheckEntry,safeStem,storeAssetJobs } from './export-plan.ts';
@@ -26,7 +29,6 @@ let projectUrls:string[]=[],dashboardUrls:string[]=[],previewUrl='',previewVersi
 const defaultPalette:Palette={accent:'#4857d9',ink:'#20243a',paper:'#f3f2ec',secondary:'#a8d6c4'};
 
 function errorText(error:unknown){return error instanceof Error?error.message:'An unexpected error occurred.'}
-function palette(){return project?.analysis?.palette||defaultPalette}
 function releaseProjectUrls(){projectUrls.forEach(URL.revokeObjectURL);projectUrls=[];if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=''}previewVersion++}
 function releaseDashboardUrls(){dashboardUrls.forEach(URL.revokeObjectURL);dashboardUrls=[]}
 async function reloadProjects(){projects=await listProjects()}
@@ -68,7 +70,7 @@ async function createProject(name:string,files:File[]){
  const problem=validateUploads(files);if(problem||!apiKey){renderOnboarding(problem||'Enter a Gemini API key.');return}
  apiKey=saveApiKey(apiKey,localStorage);
  const progress=showWorking(name||'New project','Preparing your screenshots',10);const shots:ProjectShot[]=[];for(let i=0;i<files.length;i++)shots.push(await makeShot(files[i],i));const now=Date.now();
- project={id:crypto.randomUUID(),name:name||files[0].name.replace(/\.[^.]+$/,'')||'Untitled app',createdAt:now,updatedAt:now,status:'analyzing',screens:shots,englishApproved:false};await saveProject(project);
+ project={id:crypto.randomUUID(),name:name||files[0].name.replace(/\.[^.]+$/,'')||'Untitled app',createdAt:now,updatedAt:now,status:'analyzing',screens:shots,englishApproved:false,phoneColorMode:'auto'};await saveProject(project);
  try{const analysis=await analyzeScreenshots(apiKey,project.name,shots,fetch,progress);project.analysis=analysis;for(const shot of shots){const result=analysis.screens.find(item=>item.id===shot.id);shot.headline=result?.headline||'';shot.subheadline=result?.subheadline||''}project.status='needs-approval';await persist();await reloadProjects();activeScreen=0;locale='en';openCurrentProject()}catch(error){project.status='error';project.error=errorText(error);await persist();await reloadProjects();renderProjectFailure(errorText(error))}
 }
 
@@ -88,9 +90,40 @@ function wireStudio(){if(!project)return;
  $$<HTMLElement>('[data-locale]').forEach(button=>button.addEventListener('click',()=>{locale=button.dataset.locale||'en';renderStudio()}));
  const localizationFile=$<HTMLInputElement>('#localization-file');localizationFile?.addEventListener('change',()=>{const file=localizationFile.files?.[0];if(file)void importLocalizationFile(file)});
  $$<HTMLInputElement>('[data-translation-locale]').forEach(input=>input.addEventListener('change',()=>void toggleTranslationLocale(input.dataset.translationLocale||'',input.checked)));
+ $$<HTMLButtonElement>('[data-phone-mode]').forEach(button=>button.addEventListener('click',()=>void changePhoneMode(button.dataset.phoneMode==='manual'?'manual':'auto')));
+ $('#reset-phone-color')?.addEventListener('click',()=>void changePhoneMode('auto'));
+ const picker=$<HTMLInputElement>('#phone-color-picker'),hex=$<HTMLInputElement>('#phone-color-hex');
+ picker?.addEventListener('input',()=>void updateManualPhoneColor(picker.value,true));
+ hex?.addEventListener('input',()=>void updateManualPhoneColor(hex.value,false));
+ $('#regenerate-creative')?.addEventListener('click',()=>openRegenerationModal());
  const h=$<HTMLTextAreaElement>('#headline-input'),s=$<HTMLTextAreaElement>('#subheadline-input');h?.addEventListener('input',()=>updateCopy('headline',h.value));s?.addEventListener('input',()=>updateCopy('subheadline',s.value));
  $('#approve-translate')?.addEventListener('click',()=>void approveAndTranslate());
  if(project.error&&!project.analysis)$('#approve-translate')?.addEventListener('dblclick',()=>void rerunAnalysis());
+}
+
+async function changePhoneMode(mode:'auto'|'manual'){
+ if(!project)return;project=setPhoneColorMode(project,mode,Date.now());await saveProject(project);renderStudio();
+}
+
+async function updateManualPhoneColor(value:string,fromPicker:boolean){
+ if(!project)return;const valid=normalizeHexColor(value),error=$<HTMLElement>('#phone-color-error');
+ if(!valid){if(error)error.textContent='Use a six-digit hex color such as #111521.';return}
+ if(error)error.textContent='';project=setManualPhoneColor(project,valid,Date.now());await saveProject(project);
+ const picker=$<HTMLInputElement>('#phone-color-picker'),hex=$<HTMLInputElement>('#phone-color-hex');if(!fromPicker&&picker)picker.value=valid;if(fromPicker&&hex)hex.value=valid;schedulePreview();
+}
+
+function openRegenerationModal(initialSuggestion=''){
+ if(!project)return;const modal=$<HTMLElement>('#modal-root');if(!modal)return;modal.innerHTML=regenerationModalMarkup();const input=modal.querySelector<HTMLTextAreaElement>('#regenerate-suggestion');if(input)input.value=initialSuggestion;
+ modal.querySelector('.modal-x')?.addEventListener('click',()=>modal.innerHTML='');
+ modal.querySelectorAll<HTMLElement>('[data-regeneration-example]').forEach(button=>button.addEventListener('click',()=>{if(input)input.value=button.dataset.regenerationExample||''}));
+ modal.querySelector('#run-regeneration')?.addEventListener('click',()=>void runRegeneration(input?.value||''));
+}
+
+async function runRegeneration(suggestion:string){
+ if(!project?.analysis)return;const before=project,shot=before.screens[activeScreen];if(!shot)return;
+ if(!apiKey){openKeyDialog(()=>void runRegeneration(suggestion));return}
+ apiKey=saveApiKey(apiKey,localStorage);const progress=showWorking(before.name,'Regenerating this creative',45);
+ try{const creative=await regenerateScreenCreative(apiKey,before.name,before.analysis,shot,suggestion,fetch,progress);project=applyRegeneratedCreative(before,shot.id,creative,Date.now());locale='en';await saveProject(project);await reloadProjects();openCurrentProject()}catch(error){project=before;editorNotice=`Regeneration failed: ${errorText(error)}`;openCurrentProject()}
 }
 
 async function importLocalizationFile(file:File){
@@ -102,7 +135,7 @@ async function toggleTranslationLocale(code:string,selected:boolean){if(!project
 
 function updateCopy(field:'headline'|'subheadline',value:string){if(!project)return;const shot=project.screens[activeScreen],analysis=project.analysis?.screens.find(item=>item.id===shot.id);project=updateScreenCopy(project,shot.id,locale,field,value,Date.now());window.clearTimeout(saveTimer);saveTimer=window.setTimeout(()=>void persist(),350);const copy=copyFor(project,project.screens[activeScreen],locale),scan=scanCopy(`${copy.headline} ${copy.subheadline}`,(analysis?.detectedText||[]).join(' ')),warning=analysis?.overlapWarning||(scan.overlap?`Possible repeated on-screen text: ${scan.matches.join(', ')}`:'');const box=$<HTMLElement>('#overlap-result');if(box){box.className=`overlap-result ${warning?'has-warning':'clean'}`;box.innerHTML=`<span>${warning?'!':'✓'}</span><b>${warning?'Review repeated text':'No repeated screenshot text found'}</b><small>${escapeHtml(warning||'Check is based on the original screenshot.')}</small>`}schedulePreview()}
 
-function schedulePreview(){if(!project)return;const version=++previewVersion,shot=project.screens[activeScreen],copy=copyFor(project,shot,locale),size=STORE_SIZES.find(item=>item.key===previewSizeKey)||STORE_SIZES[0],mood=project.analysis?.layoutMood||'editorial',loading=$<HTMLElement>('#preview-loading');if(loading)loading.textContent='Rendering exact export…';void renderStoreAsset(shot,copy,palette(),size,size.key.startsWith('google')?'android':'iphone',mood).then(blob=>{if(version!==previewVersion)return;const image=$<HTMLImageElement>('#exact-preview');if(!image)return;if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(blob);image.src=previewUrl;image.onload=()=>{if(loading)loading.textContent=''}}).catch(error=>{if(loading)loading.textContent=errorText(error)})}
+function schedulePreview(){if(!project)return;const version=++previewVersion,shot=project.screens[activeScreen],copy=copyFor(project,shot,locale),size=STORE_SIZES.find(item=>item.key===previewSizeKey)||STORE_SIZES[0],presentation=resolveScreenPresentation(project,shot.id,defaultPalette),loading=$<HTMLElement>('#preview-loading');if(loading)loading.textContent='Rendering exact export…';void renderStoreAsset(shot,copy,presentation.palette,size,size.key.startsWith('google')?'android':'iphone',presentation.mood,{phoneColor:presentation.phoneColor}).then(blob=>{if(version!==previewVersion)return;const image=$<HTMLImageElement>('#exact-preview');if(!image)return;if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(blob);image.src=previewUrl;image.onload=()=>{if(loading)loading.textContent=''}}).catch(error=>{if(loading)loading.textContent=errorText(error)})}
 
 async function ensureDimensions(shot:ProjectShot){if(shot.sourceWidth&&shot.sourceHeight)return;const size=await readDimensions(shot.blob);shot.sourceWidth=size.width;shot.sourceHeight=size.height}
 async function openCropEditor(shotId:string){if(!project)return;const shot=project.screens.find(item=>item.id===shotId);if(!shot)return;await Promise.all(project.screens.map(ensureDimensions));await persist();if(!project)return;const container=$<HTMLElement>('#crop-root');if(!container)return;container.classList.add('crop-overlay');mountCropEditor(container,{shot,shots:project.screens,initial:shot.transform||identityTransform(),onCancel:()=>{container.classList.remove('crop-overlay');container.innerHTML=''},onApply:(transform,bulkMode)=>{if(!project)return;if(bulkMode){const result=applyTransformToMatchingShots(project,shot.id,transform,bulkMode,Date.now());project=result.project;if(bulkMode==='same-pixels')editorNotice=`Updated ${result.appliedIds.length} screenshot${result.appliedIds.length===1?'':'s'}; skipped ${result.skippedIds.length}.`}else project=setShotTransform(project,shot.id,transform,Date.now());void persist().then(()=>renderStudio())}})}
@@ -124,7 +157,7 @@ function openKeyDialog(after:()=>void){const modal=$<HTMLElement>('#modal-root')
 function openExportModal(){if(!project)return;const modal=$<HTMLElement>('#modal-root');if(!modal)return;const available=exportLocales(project);modal.innerHTML=`<div class="modal-backdrop"><div class="modal export-modal"><div class="modal-head"><div><span class="eyebrow">EXPORT</span><h2>Choose languages.</h2></div><button class="modal-x">×</button></div><p class="modal-copy">Preview and export share the exact same crop-aware renderer. Text checks remain based on the original screenshots.</p><div class="export-option-grid">${available.map(code=>`<label class="export-option"><input name="export-locale" value="${escapeHtml(code)}" type="checkbox" ${code==='en'?'checked':''}><b>${escapeHtml(code.toUpperCase())} ${escapeHtml(localeLabel(code))}</b></label>`).join('')}</div><label class="project-zip-option"><input id="include-project" type="checkbox"><span><b>Include editable project backup</b><small>Original screenshots plus crop metadata, analysis and translations.</small></span></label><button id="make-zip" class="primary-btn modal-action">Create ZIP ↓</button><div id="zip-progress" class="zip-progress"></div></div></div>`;modal.querySelector('.modal-x')?.addEventListener('click',()=>modal.innerHTML='');modal.querySelector('#make-zip')?.addEventListener('click',()=>void exportZip())}
 
 async function exportZip(){if(!project)return;const selected=$$<HTMLInputElement>('input[name="export-locale"]:checked').map(input=>input.value);if(!selected.length){const status=$<HTMLElement>('#zip-progress');if(status)status.textContent='Select at least one language.';return}const button=$<HTMLButtonElement>('#make-zip'),status=$<HTMLElement>('#zip-progress');if(button)button.disabled=true;const files:ZipFile[]=[],checks:unknown[]=[];let rendered=0;
- try{for(const loc of selected){for(const job of storeAssetJobs(project,loc)){if(status)status.textContent=`Rendering ${loc.toUpperCase()} · ${job.size.label} · ${job.screenIndex+1}/${project.screens.length}`;files.push({path:job.path,data:await renderStoreAsset(job.shot,job.copy,palette(),job.size,job.size.key.startsWith('google')?'android':'iphone',project.analysis?.layoutMood||'editorial')});checks.push(makeTextCheckEntry(project,job.shot,job.copy,loc));rendered++;if(rendered%3===0)await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))}}
+ try{for(const loc of selected){for(const job of storeAssetJobs(project,loc)){if(status)status.textContent=`Rendering ${loc.toUpperCase()} · ${job.size.label} · ${job.screenIndex+1}/${project.screens.length}`;const presentation=resolveScreenPresentation(project,job.shot.id,defaultPalette);files.push({path:job.path,data:await renderStoreAsset(job.shot,job.copy,presentation.palette,job.size,job.size.key.startsWith('google')?'android':'iphone',presentation.mood,{phoneColor:presentation.phoneColor})});checks.push(makeTextCheckEntry(project,job.shot,job.copy,loc));rendered++;if(rendered%3===0)await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))}}
   files.push({path:'TEXT-CHECK-REPORT.json',data:JSON.stringify({generatedAt:new Date().toISOString(),note:'Text detection and overlap warnings refer to original uploaded screenshots. Cropping does not trigger Gemini reanalysis.',screens:checks},null,2)});files.push({path:'EXPORT-SIZES.txt',data:STORE_SIZES.map(size=>`${size.platform} — ${size.label}: ${size.width} × ${size.height}px`).join('\n')});
   if($<HTMLInputElement>('#include-project')?.checked){files.push({path:'project/project.json',data:JSON.stringify(projectManifest(project),null,2)});for(const shot of project.screens)files.push({path:`project/originals/${shot.id}-${safeStem(shot.name)}`,data:shot.blob})}
   if(status)status.textContent='Packing ZIP…';const zip=await createZip(files),anchor=document.createElement('a');anchor.href=URL.createObjectURL(zip);anchor.download=`${safeStem(project.name)}-store-assets.zip`;anchor.click();setTimeout(()=>URL.revokeObjectURL(anchor.href),15000);if(status)status.textContent=`Done · ${files.length} files · ${(zip.size/1024/1024).toFixed(1)} MB`;if(button){button.disabled=false;button.textContent='Download another ZIP ↓'}
