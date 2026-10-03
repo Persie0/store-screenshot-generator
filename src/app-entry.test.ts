@@ -54,6 +54,13 @@ test('browser entrypoint wires phone frame state, shared presentation rendering,
  assert.match(app,/loadApiKey\(localStorage\)/);
 });
 
+test('creative regeneration uses the current English draft instead of stale analysis copy',()=>{
+ const app=readFileSync(join(root,'src/app.ts'),'utf8');
+ assert.match(app,/analysisForRegeneration\(before,shot\.id\)/);
+ assert.match(app,/regenerateScreenCreative\(apiKey,before\.name,regenerationAnalysis,shot,suggestion/);
+ assert.ok(!app.includes('regenerateScreenCreative(apiKey,before.name,before.analysis,shot,suggestion'));
+});
+
 test('crop header keeps Apply readable as a primary action',()=>{
  const css=readFileSync(join(root,'src/app-features.css'),'utf8');
  assert.match(css,/\.crop-head-actions \.primary-btn\{[^}]*background:var\(--blue\)[^}]*color:#fff[^}]*border-color:var\(--blue\)[^}]*\}/);
