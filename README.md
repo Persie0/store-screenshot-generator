@@ -18,4 +18,4 @@ npm run build
 
 ## Deploy on Vercel
 
-Import `Persie0/store_screenshot_generator` as a new Vercel project. The included `vercel.json` configures the Vite build and static output. No ChatGPT account or sign-in is used by this app; the deployed site is publicly reachable. Each user supplies their own Gemini API key in the browser. The key is used for direct Google Gemini API requests and is not stored in saved projects. Screenshots and projects are persisted locally in that user's browser.
+Import `Persie0/store_screenshot_generator` as a new Vercel project. The included `vercel.json` configures the Vite build and static output. No ChatGPT account or sign-in is used by this app; the deployed site is publicly reachable. Each user supplies their own Gemini API key in the browser. The key is saved in that browser's local storage so it can be reused for new projects, is used for direct Google Gemini API requests, and is never stored inside saved projects. Screenshots and projects are persisted locally in that user's browser.
