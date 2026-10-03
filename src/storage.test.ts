@@ -59,3 +59,20 @@ test('save and load preserves imported locale settings',async()=>{
  await saveProject(p);const loaded=await getProject('locales');
  assert.equal(loaded?.sourceLocale,'en');assert.deepEqual(loaded?.localizedLocales,['en','nb','nn']);assert.deepEqual(loaded?.translationLocales,['nb','nn']);
 });
+
+test('phone frame settings normalize legacy and malformed values and round-trip through manifest',()=>{
+ const legacy=normalizeProject(project('frame-legacy',70));
+ assert.equal(legacy.phoneColorMode,'auto');
+ assert.equal(legacy.phoneColor,undefined);
+ const configured={...project('frame-manual',80),phoneColorMode:'manual' as const,phoneColor:'#a1b2c3'};
+ const normalized=normalizeProject(configured);
+ assert.equal(normalized.phoneColorMode,'manual');
+ assert.equal(normalized.phoneColor,'#A1B2C3');
+ const manifest=projectManifest(normalized) as any;
+ assert.equal(manifest.phoneColorMode,'manual');
+ assert.equal(manifest.phoneColor,'#A1B2C3');
+ assert.equal('apiKey' in manifest,false);
+ const malformed=normalizeProject({...project('frame-bad',90),phoneColorMode:'unexpected' as any,phoneColor:'#123'} as any);
+ assert.equal(malformed.phoneColorMode,'auto');
+ assert.equal(malformed.phoneColor,undefined);
+});
