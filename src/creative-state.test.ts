@@ -63,3 +63,12 @@ test('regenerated creative updates only selected screen and invalidates only its
  assert.equal(updated.updatedAt,99);
  assert.equal(applyRegeneratedCreative(project,'missing',creative,100),project);
 });
+
+test('regeneration cannot replace the selected analysis screen id',()=>{
+ const project=makeProject();
+ const mismatched:ScreenCopy={id:'wrong-id',headline:'Fresh',subheadline:'New',detectedText:[],overlapWarning:''};
+ const updated=applyRegeneratedCreative(project,'s1',mismatched,101);
+ assert.equal(updated.analysis?.screens[0].id,'s1');
+ assert.equal(updated.analysis?.screens[0].headline,'Fresh');
+ assert.equal(updated.screens[0].id,'s1');
+});
