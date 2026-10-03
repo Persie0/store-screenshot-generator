@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { identityTransform } from './crop.ts';
-import { getTransformedContentAspect,planShotInViewport } from './render.ts';
+import { getTransformedContentAspect,planShotInViewport,resolveRenderPhoneColor } from './render.ts';
 
 test('identity render plan keeps the full screenshot visible',()=>{
  const plan=planShotInViewport(1179,2556,identityTransform(),{x:0,y:0,width:500,height:1200});
@@ -23,4 +23,10 @@ test('content aspect follows crop and rotation for composition sizing',()=>{
  const tall={...identityTransform(),crop:{x:0,y:0,width:.5,height:1}};
  assert.equal(getTransformedContentAspect(1000,2000,tall),.25);
  assert.equal(getTransformedContentAspect(1000,2000,{...tall,rotation:90}),4);
+});
+
+test('renderer phone frame option uses valid supplied color and legacy fallback',()=>{
+ assert.equal(resolveRenderPhoneColor({phoneColor:'#a1b2c3'}),'#A1B2C3');
+ assert.equal(resolveRenderPhoneColor({phoneColor:'#123'}),'#111521');
+ assert.equal(resolveRenderPhoneColor(), '#111521');
 });
