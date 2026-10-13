@@ -21,3 +21,20 @@ test('Discover pages scans in place without any locale change or force-stop',()=
  assert.ok(!discovery.includes('restore('));
  assert.match(discovery,/Source locale mismatch/);
 });
+
+test('manual mode, locale capture, and locale restore never launch the app',()=>{
+ const source=readFileSync('src/capture.ts','utf8');
+ assert.ok(!source.includes('connected().restart('));
+ assert.ok(!source.includes('replayRoute('));
+ assert.ok(!source.includes('originalManualLocale'));
+ assert.match(source,/captureRoutesInPlace/);
+ const manual=source.slice(source.indexOf('async function manualStart()'),source.indexOf('function targets()'));
+ assert.ok(!manual.includes('.setLocale('));
+ const restoration=source.slice(source.indexOf('async function restore('),source.indexOf('async function discovery()'));
+ assert.ok(!restoration.includes('.restart('));
+});
+test('Python fallback cannot call monkey or force-stop',()=>{
+ const source=readFileSync('public/capture_locales.py','utf8');
+ assert.ok(!source.includes("shell('monkey'"));
+ assert.ok(!source.includes("shell('am','force-stop'"));
+});
