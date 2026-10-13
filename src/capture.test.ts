@@ -11,8 +11,13 @@ test('USB connection errors expose non-destructive instructions and a release co
  assert.match(code,/Python ADB fallback/);
 });
 
-test('initial discovery does not force-stop and matching source locale avoids resetting the app',()=>{
+test('Discover pages scans in place without any locale change or force-stop',()=>{
  const code=readFileSync('src/capture.ts','utf8');
- assert.match(code,/replayRoute\(connected\(\),app,route,\{restart:route\.length>0\}\)/);
- assert.match(code,/if\(original!==lang\)await connected\(\)\.setLocale\(app,lang\)/);
+ const discovery=code.slice(code.indexOf('async function discovery(){'),code.indexOf('async function liveRefresh()'));
+ assert.match(discovery,/discoverInPlace\(connected\(\),app,limit/);
+ assert.ok(!discovery.includes('replayRoute('));
+ assert.ok(!discovery.includes('.restart('));
+ assert.ok(!discovery.includes('.setLocale('));
+ assert.ok(!discovery.includes('restore('));
+ assert.match(discovery,/Source locale mismatch/);
 });
