@@ -6,7 +6,7 @@ const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
 /** ADB/WebUSB must have exclusive access to the device USB interface. */
 export function isWebUsbBusyError(error:unknown):boolean{
  const message=error instanceof Error?(error.name+' '+error.message):String(error);
- return /DeviceBusyError|already in us(?:e|ed)|unable to claim interface|cannot claim interface|LIBUSB_ERROR_BUSY|device.*\bbusy\b/i.test(message);
+ return /DeviceBusyError|already in us(?:e|ed)|unable to claim interface|cannot claim interface|LIBUSB_ERROR_BUSY|USB ADB interface is busy|device.*\bbusy\b/i.test(message);
 }
 export function explainWebUsbError(error:unknown):string{
  const message=error instanceof Error?error.message:String(error);
