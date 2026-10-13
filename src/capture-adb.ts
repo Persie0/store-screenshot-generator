@@ -3,6 +3,16 @@ export type WebAdbConnection={serial:string;run:(command:string)=>Promise<string
 type ShellResult={exitCode:number;stdout:string;stderr:string};
 type AdbLike={subprocess:{shellProtocol?:{spawnWaitText:(command:string)=>Promise<ShellResult>;spawnWait:(command:string)=>Promise<{exitCode:number;stdout:Uint8Array;stderr:Uint8Array}>}};close?:()=>Promise<void>};
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
+/** ADB/WebUSB must have exclusive access to the device USB interface. */
+export function isWebUsbBusyError(error:unknown):boolean{
+ const message=error instanceof Error?(error.name+' '+error.message):String(error);
+ return /DeviceBusyError|already in us(?:e|ed)|unable to claim interface|cannot claim interface|LIBUSB_ERROR_BUSY|device.*\bbusy\b/i.test(message);
+}
+export function explainWebUsbError(error:unknown):string{
+ const message=error instanceof Error?error.message:String(error);
+ if(!isWebUsbBusyError(error))return message;
+ return 'USB ADB interface is busy. Close Android Studio, scrcpy, and other WebADB tabs; run "adb kill-server" on your computer, then unplug/reconnect the phone and retry. Or use the Python ADB fallback while keeping local ADB running.';
+}
 function checkedCommand(command:string,result:ShellResult):string{if(result.exitCode!==0||/(?:\bException\b|Unknown command|Error:)/i.test(result.stderr+result.stdout))throw new Error('ADB command failed: '+command+'\n'+(result.stderr||result.stdout).slice(0,900));return result.stdout}
 export function parseAppLocale(output:string):string{const match=/\[([^\]]*)\]/.exec(output);if(!match)throw new Error('Unable to confirm app locale: '+output.slice(0,200));return match[1].trim().split(',')[0]?.trim()||''}
 export function makeAdbConnection(adb:AdbLike,serial='Android'):WebAdbConnection{
@@ -24,7 +34,8 @@ export async function connectWebAdb():Promise<WebAdbConnection>{
  const [core,web,credentials]=await Promise.all([importLibrary('https://esm.sh/@yume-chan/adb@2.1.0?bundle'),importLibrary('https://esm.sh/@yume-chan/adb-daemon-webusb@2.1.0?bundle'),importLibrary('https://esm.sh/@yume-chan/adb-credential-web@2.1.0?bundle')]);
  const manager=(web.AdbDaemonWebUsbDeviceManager as {BROWSER?:{requestDevice:()=>Promise<{serial:string;connect:()=>Promise<unknown>}|undefined>}})?.BROWSER;if(!manager)throw new Error('No WebUSB ADB manager is available in this browser.');
  const device=await manager.requestDevice();if(!device)throw new Error('USB device selection was canceled.');
- const connection=await device.connect();
+ let connection:unknown;
+ try{connection=await device.connect()}catch(error){throw new Error(explainWebUsbError(error),{cause:error})}
  const CredentialStore=(credentials.default||credentials.AdbWebCredentialStore) as new()=>unknown;
  const Transport=core.AdbDaemonTransport as {authenticate:(input:{serial:string;connection:unknown;credentialStore:unknown})=>Promise<unknown>};
  const Adb=core.Adb as new(transport:unknown)=>AdbLike;
