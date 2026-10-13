@@ -10,3 +10,9 @@ test('USB connection errors expose non-destructive instructions and a release co
  assert.match(code,/adb kill-server/);
  assert.match(code,/Python ADB fallback/);
 });
+
+test('initial discovery does not force-stop and matching source locale avoids resetting the app',()=>{
+ const code=readFileSync('src/capture.ts','utf8');
+ assert.match(code,/replayRoute\(connected\(\),app,route,\{restart:route\.length>0\}\)/);
+ assert.match(code,/if\(original!==lang\)await connected\(\)\.setLocale\(app,lang\)/);
+});
