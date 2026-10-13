@@ -6,7 +6,6 @@ No pip dependencies or remote uploads.
 """
 import argparse
 import json
-import pathlib
 import re
 import subprocess
 import sys
@@ -37,11 +36,31 @@ def set_locale(pkg,locale):
  if 'Exception' in output or 'Error:' in output: raise RuntimeError(output)
  actual=get_locale(pkg)
  if actual!=locale: raise RuntimeError('Locale verification failed: '+repr(actual)+' != '+repr(locale))
-def launch(pkg):
- shell('am','force-stop',pkg)
- output=shell('monkey','-p',pkg,'-c','android.intent.category.LAUNCHER','1')
- if 'No activities found' in output or 'aborted' in output: raise RuntimeError('No launchable activity')
- time.sleep(1.0)
+def go_back():
+ shell('input','keyevent','KEYCODE_BACK')
+ time.sleep(.4)
+def tap_step(step):
+ x,y=step['x'],step['y']
+ if step['id']:
+  try:
+   match=next((n for n in hierarchy() if n.get('resource-id')==step['id'] and n.get('clickable')=='true'),None)
+   if match:
+    b=BOUNDS.fullmatch(match.get('bounds',''))
+    if b:
+     left,top,right,bottom=map(int,b.groups());x=(left+right)//2;y=(top+bottom)//2
+  except Exception: pass
+ shell('input','tap',str(x),str(y));time.sleep(.5)
+def fingerprint(nodes):
+ return '|'.join((n.get('resource-id') or '')+':'+(n.get('text') or '')+':'+(n.get('content-desc') or '') for n in nodes)
+def shape(nodes,pkg):
+ return '|'.join((n.get('resource-id') or '')+':'+(n.get('class') or '')+':'+(n.get('bounds') or '') for n in nodes if n.get('package')==pkg)
+def require_app(nodes,pkg):
+ if nodes and not any(n.get('package')==pkg for n in nodes):
+  raise RuntimeError('Navigation left the target app. Open it manually; no relaunch will be attempted.')
+def safe_hierarchy():
+ try:return hierarchy()
+ except Exception:return []
+
 def screenshot():
  data=adb('exec-out','screencap','-p',binary=True)
  if not data.startswith(b'\x89PNG\r\n\x1a\n'): raise RuntimeError('Not a PNG screenshot')
@@ -68,38 +87,76 @@ def actions(nodes,pkg):
   output.append({'x':(left+right)//2,'y':(top+bottom)//2,'id':a.get('resource-id',''),'label':label})
   if len(output)>=8:break
  return output
-def replay(pkg,route):
- launch(pkg)
- for step in route:
-  x,y=step['x'],step['y']
-  if step['id']:
-   try:
-    nodes=hierarchy()
-    match=next((n for n in nodes if n.get('resource-id')==step['id'] and n.get('clickable')=='true'),None)
-    if match:
-     b=BOUNDS.fullmatch(match.get('bounds',''))
-     if b:
-      a,c,d,e=map(int,b.groups());x=(a+d)//2;y=(c+e)//2
-   except Exception: pass
-  shell('input','tap',str(x),str(y));time.sleep(.5)
 def discover(pkg,limit,depth):
- queue=[[]];seen=set();fingerprints=set();pages=[]
- while queue and len(pages)<limit and len(seen)<limit*14:
-  route=queue.pop(0);key=tuple((p['id'],p['x'],p['y']) for p in route)
-  if key in seen:continue
-  seen.add(key)
-  try:
-   replay(pkg,route);nodes=hierarchy()
-   if nodes and not any(n.get('package')==pkg for n in nodes):continue
-   signature='|'.join((n.get('resource-id') or '')+':'+(n.get('text') or '')+':'+(n.get('content-desc') or '') for n in nodes)
-   if signature in fingerprints:continue
-   fingerprints.add(signature)
-   name=route[-1]['label'] if route else 'Home'
-   pages.append({'id':'s'+str(len(pages)+1).zfill(3),'name':name,'route':route,'png':screenshot()})
-   print('['+str(len(pages))+'] '+name)
-   if len(route)<depth:queue.extend(route+[item] for item in actions(nodes,pkg))
-  except Exception as exc:print('Skipping route:',exc,file=sys.stderr)
+ """Explore using taps and Android Back. Never launch or force-stop an app."""
+ seen=set();pages=[];attempts=0;limit_attempts=limit*14
+ def visit(route):
+  nonlocal attempts
+  if len(pages)>=limit or attempts>=limit_attempts:return True
+  attempts+=1
+  nodes=safe_hierarchy();require_app(nodes,pkg)
+  signature=fingerprint(nodes) if nodes else 'unknown-hierarchy'
+  if signature in seen:return True
+  seen.add(signature)
+  name=route[-1]['label'] if route else 'Current screen'
+  pages.append({'id':'s'+str(len(pages)+1).zfill(3),'name':name,'route':route,'png':screenshot()})
+  print('['+str(len(pages))+'] '+name)
+  if not nodes or len(route)>=depth:return True
+  for action in actions(nodes,pkg):
+   if len(pages)>=limit or attempts>=limit_attempts:break
+   current=safe_hierarchy()
+   if fingerprint(current)!=signature:
+    print('Discovery stopped: current screen changed. No relaunch attempted.',file=sys.stderr)
+    return False
+   try:
+    tap_step(action)
+    child=safe_hierarchy()
+    if child:require_app(child,pkg)
+    if child and fingerprint(child)!=signature:
+     if not visit(route+[action]):return False
+     go_back()
+     restored=safe_hierarchy()
+     if fingerprint(restored)!=signature:
+      print('Discovery stopped: Back did not restore the previous page.',file=sys.stderr)
+      return False
+    elif not child:
+     print('Discovery stopped: accessibility nodes not available after tap.',file=sys.stderr)
+     return False
+   except Exception as exc:
+    print('Discovery stopped:',exc,file=sys.stderr)
+    return False
+  return True
+ visit([])
  return pages
+
+def capture_in_place(pkg,pages):
+ """Navigate from the starting screen with tabs/taps/Back; fail closed if route recovery fails."""
+ captured=[];position=[];ancestors=[]
+ root=safe_hierarchy();require_app(root,pkg);ancestors=[shape(root,pkg)]
+ for page in pages:
+  route=page['route']
+  common=0
+  while common<min(len(position),len(route)) and position[common]==route[common]:common+=1
+  while len(position)>common:
+   go_back();position.pop();ancestors.pop()
+   nodes=safe_hierarchy();require_app(nodes,pkg)
+   expected=ancestors[-1]
+   if expected and shape(nodes,pkg) and shape(nodes,pkg)!=expected:
+    raise RuntimeError('Android Back did not return to the previous screen; capture stopped.')
+  for step in route[common:]:
+   before=safe_hierarchy();require_app(before,pkg)
+   tap_step(step)
+   after=safe_hierarchy();require_app(after,pkg)
+   position.append(step);ancestors.append(shape(after,pkg))
+  captured.append((page['id'],screenshot()))
+  print('Captured',page['name'])
+ while position:
+  go_back();position.pop();ancestors.pop()
+  nodes=safe_hierarchy();require_app(nodes,pkg)
+  expected=ancestors[-1]
+  if expected and shape(nodes,pkg) and shape(nodes,pkg)!=expected:
+   raise RuntimeError('Android Back did not restore the starting screen.')
+ return captured
 
 def main():
  parser=argparse.ArgumentParser(description=__doc__)
@@ -118,7 +175,8 @@ def main():
  if not adb('shell','pm','path',args.package).startswith('package:'):parser.error('App is not installed')
  original=get_locale(args.package);failures=[]
  try:
-  set_locale(args.package,args.source);pages=discover(args.package,args.max_pages,args.depth)
+  if original and original!=args.source:raise RuntimeError('Source locale mismatch: app reports '+original+'. Change --source or manually select the right language on the phone. No automatic change during discovery.')
+  pages=discover(args.package,args.max_pages,args.depth)
   if not pages:raise RuntimeError('No screens discovered. Unlock app and check package ID.')
   if not args.all:
    answer=input('Select screen numbers (comma separated, Enter = all): ').strip()
@@ -128,11 +186,15 @@ def main():
   if not pages:raise RuntimeError('No pages selected')
   captures=[]
   for locale in locales:
-   try:set_locale(args.package,locale)
-   except Exception as exc:failures.append(locale+': '+str(exc));continue
-   for page in pages:
-    try:replay(args.package,page['route']);captures.append((locale,page['id'],screenshot()));print('Captured',locale,page['name'])
-    except Exception as exc:failures.append(locale+' / '+page['name']+': '+str(exc))
+   print('Switching to',locale,'(Android may recreate the activity; no app relaunch will be requested)')
+   try:
+    if get_locale(args.package)!=locale:set_locale(args.package,locale)
+    for page_id,data in capture_in_place(args.package,pages):
+     captures.append((locale,page_id,data))
+   except Exception as exc:
+    failures.append(locale+': '+str(exc))
+    print('Stopping captures after navigation failure; no relaunch attempted.',file=sys.stderr)
+    break
   with zipfile.ZipFile(args.output,'w',compression=zipfile.ZIP_DEFLATED) as output:
    for page in pages:output.writestr(args.source+'/'+page['id']+'.png',page['png'])
    for locale,page_id,data in captures:output.writestr(locale+'/'+page_id+'.png',data)
@@ -141,6 +203,8 @@ def main():
   print('Saved',args.output,len(captures),'localized captures and',len(failures),'failures')
   for err in failures:print('WARNING',err,file=sys.stderr)
  finally:
-  try:set_locale(args.package,original);launch(args.package);print('Restored original app language.')
+  try:
+   if get_locale(args.package)!=original:set_locale(args.package,original)
+   print('Restored original app language without launching the app.')
   except Exception as exc:print('WARNING: Could not restore original locale:',exc,file=sys.stderr)
 if __name__=='__main__':main()
