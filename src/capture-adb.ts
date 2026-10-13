@@ -42,8 +42,8 @@ export async function connectWebAdb():Promise<WebAdbConnection>{
  if(!Transport||!Adb||!CredentialStore)throw new Error('WebADB library could not be loaded.');
  return makeAdbConnection(new Adb(await Transport.authenticate({serial:device.serial,connection,credentialStore:new CredentialStore()})),device.serial);
 }
-export async function replayRoute(device:WebAdbConnection,pkg:string,steps:TapStep[]):Promise<void>{
- await device.restart(pkg);
+export async function replayRoute(device:WebAdbConnection,pkg:string,steps:TapStep[],options:{restart?:boolean}={}):Promise<void>{
+ if(options.restart!==false)await device.restart(pkg);
  for(const step of steps){let tap=step;try{tap=resolveTap(step,await device.dump())}catch{/* Coordinate fallback for Flutter layouts without resource IDs. */}
  await device.tap(tap)}
 }
