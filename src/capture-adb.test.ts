@@ -14,3 +14,11 @@ test('WebUSB device busy error provides actionable non-destructive recovery',()=
  assert.equal(isWebUsbBusyError(new Error('Device selection canceled')),false);
  assert.equal(explainWebUsbError(new Error('Device selection canceled')),'Device selection canceled');
 });
+
+test('discovery can inspect the first screen without force-stopping the app',async()=>{
+ const commands:string[]=[];
+ const shell={spawnWaitText:async(command:string)=>{commands.push(command);return {exitCode:0,stdout:'',stderr:''}},spawnWait:async()=>({exitCode:0,stdout:new Uint8Array(25),stderr:new Uint8Array()})};
+ const adb=makeAdbConnection({subprocess:{shellProtocol:shell}});
+ await replayRoute(adb,'com.demo.app',[],{restart:false});
+ assert.equal(commands.some(c=>c.includes('force-stop')),false);
+});
