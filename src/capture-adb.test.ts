@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeAdbConnection,parseAppLocale,replayRoute} from './capture-adb.ts';
+import {makeAdbConnection,parseAppLocale,replayRoute,explainWebUsbError,isWebUsbBusyError} from './capture-adb.ts';
 test('parses app locale and empty system default',()=>{assert.equal(parseAppLocale('Locales for app are [fr-FR]'),'fr-FR');assert.equal(parseAppLocale('Locales for app are []'),'');assert.throws(()=>parseAppLocale('Unknown command'));});
 test('locale changes are verified and injection rejected',async()=>{const commands:string[]=[];let locale='';const shell={spawnWaitText:async(command:string)=>{commands.push(command);if(command.includes('set-app-locales'))locale='fr-FR';return {exitCode:0,stdout:command.includes('get-app-locales')?'Locales for app are ['+locale+']':'',stderr:''}},spawnWait:async()=>({exitCode:0,stdout:new Uint8Array(25),stderr:new Uint8Array()})};const adb=makeAdbConnection({subprocess:{shellProtocol:shell}});await adb.setLocale('com.demo.app','fr-FR');assert.ok(commands.some(c=>c.includes('--locales')));await assert.rejects(()=>adb.setLocale('com.demo.app; echo unsafe','fr-FR'));});
 test('route replay restarts and taps in order',async()=>{const commands:string[]=[];const shell={spawnWaitText:async(command:string)=>{commands.push(command);return {exitCode:0,stdout:'Events injected: 1',stderr:''}},spawnWait:async()=>({exitCode:0,stdout:new Uint8Array(25),stderr:new Uint8Array()})};const adb=makeAdbConnection({subprocess:{shellProtocol:shell}});adb.dump=async()=>[];await replayRoute(adb,'com.demo.app',[{x:100,y:200,resourceId:'',label:'Settings'}]);assert.ok(commands.some(c=>c.includes('am force-stop')));assert.ok(commands.some(c=>c.includes('input tap 100 200')));});
+
+test('WebUSB device busy error provides actionable non-destructive recovery',()=>{
+ for(const problem of ['The device is already in used by another program','Unable to claim interface','DeviceBusyError','LIBUSB_ERROR_BUSY']){
+  assert.equal(isWebUsbBusyError(new Error(problem)),true);
+  assert.match(explainWebUsbError(new Error(problem)),/adb kill-server/);
+  assert.match(explainWebUsbError(new Error(problem)),/other WebADB tabs/);
+ }
+ assert.equal(isWebUsbBusyError(new Error('Device selection canceled')),false);
+ assert.equal(explainWebUsbError(new Error('Device selection canceled')),'Device selection canceled');
+});
